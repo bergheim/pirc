@@ -1,0 +1,18 @@
+# credentials
+agent/auth.json
+agent/models-store.json
+agent/trust.json
+agent/run-history.jsonl
+
+# runtime / caches
+logs/
+.pnpm-store/
+web-search-cache/
+pi-acp/
+agent/sessions/
+agent/tmp/
+agent/npm/
+agent/git/
+
+# local instrumentation
+agent/extensions/caveman-native.js

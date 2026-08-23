@@ -271,11 +271,11 @@ export default function (pi: ExtensionAPI) {
 			);
 		},
 
-		// Match stock formatBashCall: bold toolTitle `$ command`
 		renderCall(args, theme, context) {
 			const cmd = args?.command == null ? "" : String(args.command);
-			const commandDisplay = cmd || theme.fg("toolOutput", "...");
-			let line = theme.fg("toolTitle", theme.bold(`$ ${commandDisplay}`));
+			const commandDisplay = cmd || "...";
+			let line = theme.fg("toolTitle", theme.bold(" bash"));
+			line += ` ${theme.fg("toolOutput", commandDisplay)}`;
 			if (args?.timeout != null) {
 				line += theme.fg("muted", ` (timeout ${args.timeout}s)`);
 			}

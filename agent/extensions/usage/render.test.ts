@@ -2,15 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   barColor,
+  cacheRemainingSeconds,
+  cacheTone,
   currentLineSegments,
   fitSegments,
   formatDuration,
   formatK,
+  formatRemaining,
+  promptCacheTtlSeconds,
   renderBar,
   renderCurrentLine,
+  TONE,
   type CurrentSession,
 } from "./render.ts";
-import { parseGrokBilling } from "./parse.ts";
+import { parseCodexUsage, parseGrokBilling } from "./parse.ts";
 
 const theme = { fg: (_color: string, text: string) => text };
 
@@ -26,6 +31,7 @@ const sample: CurrentSession = {
   cost: 1.23,
   fiveHour: { percent: 24, resetsInSeconds: 7200 },
   week: { percent: 41, resetsInSeconds: 259200 },
+  cacheRemainingSeconds: null,
 };
 
 test("formatK", () => {
@@ -71,7 +77,11 @@ test("current line includes context and both windows", () => {
 
 test("omits thinking, branch, and empty windows", () => {
   const plains = currentLineSegments({
-    ...sample, thinking: null, branch: null, fiveHour: null, week: null,
+    ...sample,
+    thinking: null,
+    branch: null,
+    fiveHour: null,
+    week: null,
   }).map((s) => s.plain);
   assert.equal(plains[0], "[xai/grok-4.6]");
   assert.ok(!plains.includes("master"));
@@ -84,7 +94,11 @@ test("fitSegments drops cost before windows and context", () => {
   assert.ok(full.some((s) => s.plain.startsWith("$")));
 
   const cost = segs.find((s) => s.key === "cost")!;
-  const widthWithoutCost = segs.reduce((n, s) => n + s.plain.length, 0) + (segs.length - 1) - cost.plain.length - 1;
+  const widthWithoutCost =
+    segs.reduce((n, s) => n + s.plain.length, 0) +
+    (segs.length - 1) -
+    cost.plain.length -
+    1;
   const noCost = fitSegments(segs, widthWithoutCost);
   assert.ok(!noCost.some((s) => s.plain.startsWith("$")));
   assert.ok(noCost.some((s) => s.key === "bar"));
@@ -101,17 +115,108 @@ test("renderCurrentLine stays within width", () => {
   assert.ok(line.includes("[xai/grok-4.6 medium]"));
 });
 
-test("parseGrokBilling reads weekly credits", () => {
-  const now = Date.parse("2026-08-17T12:07:37.089603+00:00");
-  const usage = parseGrokBilling({
-    config: {
-      creditUsagePercent: 1.0,
-      currentPeriod: {
-        type: "USAGE_PERIOD_TYPE_WEEKLY",
-        end: "2026-08-24T12:07:37.089603+00:00",
+test("cache segment ticks remaining time", () => {
+  const plains = currentLineSegments({
+    ...sample,
+    cacheRemainingSeconds: 272,
+  }).map((s) => s.plain);
+  assert.ok(plains.includes("cache 4m 32s"));
+});
+
+test("cacheTone yellow then red as it nears", () => {
+  assert.equal(cacheTone(272), "dim");
+  assert.equal(cacheTone(119), TONE.yellow);
+  assert.equal(cacheTone(30), TONE.yellow);
+  assert.equal(cacheTone(29), TONE.red);
+});
+
+test("formatRemaining keeps leftover minutes", () => {
+  assert.equal(formatRemaining(45), "45s");
+  assert.equal(formatRemaining(272), "4m 32s");
+  assert.equal(formatRemaining(7200), "2h");
+  assert.equal(formatRemaining(9900), "2h 45m");
+});
+
+test("promptCacheTtlSeconds matches provider docs", () => {
+  assert.equal(
+    promptCacheTtlSeconds("anthropic", "claude-opus-4", undefined),
+    300,
+  );
+  assert.equal(
+    promptCacheTtlSeconds("anthropic", "claude-opus-4", "long"),
+    3600,
+  );
+  assert.equal(
+    promptCacheTtlSeconds("openai-codex", "gpt-5.6", undefined),
+    null,
+  );
+  assert.equal(promptCacheTtlSeconds("openai-codex", "gpt-5.6", "long"), 86400);
+  assert.equal(
+    promptCacheTtlSeconds(
+      "gateway",
+      "openrouter/anthropic/claude-opus-5",
+      undefined,
+    ),
+    300,
+  );
+  assert.equal(promptCacheTtlSeconds("llama", "bot-fast", undefined), null);
+});
+
+test("cacheRemainingSeconds expires", () => {
+  assert.equal(cacheRemainingSeconds(1000, 300, 1000), 300);
+  assert.equal(cacheRemainingSeconds(1000, 300, 1000 + 300_000), null);
+  assert.equal(cacheRemainingSeconds(null, 300, 1000), null);
+});
+
+test("parseCodexUsage classifies 5h vs weekly by duration", () => {
+  const both = parseCodexUsage({
+    rate_limit: {
+      primary_window: {
+        used_percent: 24,
+        reset_after_seconds: 7200,
+        limit_window_seconds: 18000,
+      },
+      secondary_window: {
+        used_percent: 41,
+        reset_after_seconds: 259200,
+        limit_window_seconds: 604800,
       },
     },
-  }, now);
+  });
+  assert.ok(both);
+  assert.equal(both.sessionPercent, 24);
+  assert.equal(both.weeklyPercent, 41);
+  assert.equal(both.sessionIsFiveHour, true);
+
+  const weeklyOnly = parseCodexUsage({
+    rate_limit: {
+      primary_window: {
+        used_percent: 74,
+        reset_after_seconds: 400000,
+        limit_window_seconds: 604800,
+      },
+      secondary_window: null,
+    },
+  });
+  assert.ok(weeklyOnly);
+  assert.equal(weeklyOnly.sessionIsFiveHour, false);
+  assert.equal(weeklyOnly.weeklyPercent, 74);
+});
+
+test("parseGrokBilling reads weekly credits", () => {
+  const now = Date.parse("2026-08-17T12:07:37.089603+00:00");
+  const usage = parseGrokBilling(
+    {
+      config: {
+        creditUsagePercent: 1.0,
+        currentPeriod: {
+          type: "USAGE_PERIOD_TYPE_WEEKLY",
+          end: "2026-08-24T12:07:37.089603+00:00",
+        },
+      },
+    },
+    now,
+  );
   assert.ok(usage);
   assert.equal(usage.sessionPercent, 1);
   assert.equal(usage.weeklyPercent, 1);

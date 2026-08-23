@@ -1,17 +1,29 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { basename } from "node:path";
 import { fetchAll, type ProviderStatus } from "./core.ts";
 import {
-  renderBar, barColor, formatDuration, renderCurrentLine, TONE,
-  type CurrentSession, type Theme, type WindowUsage,
+  renderBar,
+  barColor,
+  formatDuration,
+  renderCurrentLine,
+  TONE,
+  cacheRemainingSeconds,
+  promptCacheTtlSeconds,
+  type CurrentSession,
+  type Theme,
+  type WindowUsage,
 } from "./render.ts";
 
 function line(status: ProviderStatus): string {
   if ("stale" in status) return `${status.name}: — (${status.stale})`;
   const { sessionPercent, weeklyPercent, resetsInSeconds } = status.usage;
-  const reset = resetsInSeconds === null
-    ? ""
-    : `  resets ${formatDuration(resetsInSeconds)}`;
+  const reset =
+    resetsInSeconds === null
+      ? ""
+      : `  resets ${formatDuration(resetsInSeconds)}`;
   return (
     `${status.name}: ${renderBar(sessionPercent)} ${Math.round(sessionPercent)}%` +
     `  week ${Math.round(weeklyPercent)}%${reset}`
@@ -36,8 +48,10 @@ function footerLine(theme: Theme, status: ProviderStatus): string {
 function sessionCost(ctx: ExtensionContext | undefined): number {
   let cost = 0;
   for (const entry of ctx?.sessionManager.getBranch() ?? []) {
-    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-    const total = (entry.message as { usage?: { cost?: { total?: number } } }).usage?.cost?.total;
+    if (entry.type !== "message" || entry.message.role !== "assistant")
+      continue;
+    const total = (entry.message as { usage?: { cost?: { total?: number } } })
+      .usage?.cost?.total;
     if (typeof total === "number" && Number.isFinite(total)) cost += total;
   }
   return cost;
@@ -45,11 +59,16 @@ function sessionCost(ctx: ExtensionContext | undefined): number {
 
 function quotaName(provider: string | undefined): string | null {
   switch (provider) {
-    case "xai": return "grok";
-    case "anthropic": return "claude";
-    case "openai-codex": return "codex";
-    case "google-antigravity": return "antigravity";
-    default: return null;
+    case "xai":
+      return "grok";
+    case "anthropic":
+      return "claude";
+    case "openai-codex":
+      return "codex";
+    case "google-antigravity":
+      return "antigravity";
+    default:
+      return null;
   }
 }
 
@@ -64,8 +83,15 @@ function windowsFor(
     percent: status.usage.weeklyPercent,
     resetsInSeconds: status.usage.weeklyResetsInSeconds,
   };
-  // Grok SuperGrok is a single weekly pool; a fake 5h clone would just repeat 7d.
-  if (name === "grok") return { fiveHour: null, week };
+  // Grok SuperGrok is a weekly credit pool. Antigravity buckets are request
+  // quotas, not 5h/7d windows. Codex may also lack a 5h primary.
+  const hideFiveHour =
+    name === "grok" ||
+    name === "antigravity" ||
+    status.usage.sessionIsFiveHour === false;
+  if (hideFiveHour) {
+    return { fiveHour: null, week: name === "antigravity" ? null : week };
+  }
   return {
     fiveHour: {
       percent: status.usage.sessionPercent,
@@ -75,6 +101,20 @@ function windowsFor(
   };
 }
 
+function lastCacheWriteAtMs(ctx: ExtensionContext | undefined): number | null {
+  const branch = ctx?.sessionManager.getBranch() ?? [];
+  for (let i = branch.length - 1; i >= 0; i--) {
+    const entry = branch[i];
+    if (entry.type === "model_change" || entry.type === "compaction")
+      return null;
+    if (entry.type !== "message" || entry.message.role !== "assistant")
+      continue;
+    const ts = entry.message.timestamp;
+    return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
+  }
+  return null;
+}
+
 function snapshotCurrent(
   ctx: ExtensionContext | undefined,
   branch: string | null,
@@ -82,9 +122,10 @@ function snapshotCurrent(
 ): CurrentSession {
   const model = ctx?.model;
   const usage = ctx?.getContextUsage();
-  const thinking = model?.reasoning && ctx?.thinkingLevel && ctx.thinkingLevel !== "off"
-    ? ctx.thinkingLevel
-    : null;
+  const thinking =
+    model?.reasoning && ctx?.thinkingLevel && ctx.thinkingLevel !== "off"
+      ? ctx.thinkingLevel
+      : null;
   const windows = windowsFor(model?.provider, statuses);
   return {
     provider: model?.provider ?? "?",
@@ -98,6 +139,11 @@ function snapshotCurrent(
     cost: sessionCost(ctx),
     fiveHour: windows.fiveHour,
     week: windows.week,
+    cacheRemainingSeconds: cacheRemainingSeconds(
+      lastCacheWriteAtMs(ctx),
+      promptCacheTtlSeconds(model?.provider ?? "", model?.id ?? ""),
+      Date.now(),
+    ),
   };
 }
 
@@ -168,11 +214,31 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setFooter((tui, theme, footerData) => {
       requestRender = () => tui.requestRender();
       const unsub = footerData.onBranchChange(() => tui.requestRender());
+      let tick: ReturnType<typeof setInterval> | undefined;
+      const stopTick = () => {
+        if (tick !== undefined) {
+          clearInterval(tick);
+          tick = undefined;
+        }
+      };
       return {
-        dispose: unsub,
+        dispose() {
+          stopTick();
+          unsub();
+        },
         invalidate() {},
         render(width: number): string[] {
-          const current = snapshotCurrent(ctxRef, footerData.getGitBranch(), statuses);
+          const current = snapshotCurrent(
+            ctxRef,
+            footerData.getGitBranch(),
+            statuses,
+          );
+          if (current.cacheRemainingSeconds !== null) {
+            if (tick === undefined)
+              tick = setInterval(() => tui.requestRender(), 1000);
+          } else {
+            stopTick();
+          }
           return [
             renderCurrentLine(theme, current, width),
             ...renderFooterLines(theme, statuses, width),
@@ -187,9 +253,18 @@ export default function (pi: ExtensionAPI) {
     await refresh();
   });
 
-  pi.on("model_select", (_event, ctx) => { ctxRef = ctx; requestRender?.(); });
-  pi.on("thinking_level_select", (_event, ctx) => { ctxRef = ctx; requestRender?.(); });
-  pi.on("turn_end", (_event, ctx) => { ctxRef = ctx; requestRender?.(); });
+  pi.on("model_select", (_event, ctx) => {
+    ctxRef = ctx;
+    requestRender?.();
+  });
+  pi.on("thinking_level_select", (_event, ctx) => {
+    ctxRef = ctx;
+    requestRender?.();
+  });
+  pi.on("turn_end", (_event, ctx) => {
+    ctxRef = ctx;
+    requestRender?.();
+  });
 
   // Quota moves as turns run; re-fetch before each one. fetchAll's own
   // cache (core.ts, 60s TTL) keeps this from hammering provider APIs.

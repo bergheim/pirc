@@ -10,11 +10,6 @@ export const TONE = {
   green: "success",
 } as const;
 
-export type WindowUsage = {
-  percent: number;
-  resetsInSeconds: number | null;
-};
-
 export type CurrentSession = {
   provider: string;
   modelId: string;
@@ -23,11 +18,8 @@ export type CurrentSession = {
   branch: string | null;
   dirty: boolean;
   percent: number | null;
-  tokens: number | null;
   contextWindow: number;
   cost: number;
-  fiveHour: WindowUsage | null;
-  week: WindowUsage | null;
   cacheRemainingSeconds: number | null;
 };
 
@@ -112,6 +104,17 @@ export function cacheRemainingSeconds(
   return Math.ceil(left);
 }
 
+// Nerd Font glyphs sit above the BMP: one terminal cell, two UTF-16 units.
+// Measure and cut by code point so the footer neither under-fills nor slices
+// a surrogate pair in half.
+export function cells(s: string): number {
+  return Array.from(s).length;
+}
+
+export function clip(s: string, width: number): string {
+  return Array.from(s).slice(0, Math.max(0, width)).join("");
+}
+
 export function formatK(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "0";
   if (n < 1000) return String(Math.round(n));
@@ -181,7 +184,7 @@ export function currentLineSegments(session: CurrentSession): Segment[] {
 
 function segmentsWidth(segs: Segment[]): number {
   if (segs.length === 0) return 0;
-  return segs.reduce((n, s) => n + s.plain.length, 0) + (segs.length - 1) * 3;
+  return segs.reduce((n, s) => n + cells(s.plain), 0) + (segs.length - 1) * 3;
 }
 
 export function fitSegments(segs: Segment[], width: number): Segment[] {
@@ -198,7 +201,7 @@ export function fitSegments(segs: Segment[], width: number): Segment[] {
   if (included.length === 1 && segmentsWidth(included) > safeWidth) {
     included[0] = {
       ...included[0],
-      plain: Array.from(included[0].plain).slice(0, safeWidth).join(""),
+      plain: clip(included[0].plain, safeWidth),
     };
   }
   return included;

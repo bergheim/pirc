@@ -7,6 +7,8 @@ import { fetchAll, type ProviderStatus } from "./core.ts";
 import {
   renderBar,
   barColor,
+  cells,
+  clip,
   formatDuration,
   renderCurrentLine,
   TONE,
@@ -14,7 +16,6 @@ import {
   promptCacheTtlSeconds,
   type CurrentSession,
   type Theme,
-  type WindowUsage,
 } from "./render.ts";
 
 function line(status: ProviderStatus): string {
@@ -39,12 +40,20 @@ function providerIcon(name: string): string {
   return "󰚩";
 }
 
+// Grok SuperGrok is a weekly credit pool, and some Codex plans report no 5h
+// primary — both lead with the weekly number instead of the session one.
+function weeklyOnly(status: ProviderStatus): boolean {
+  return (
+    status.name === "grok" ||
+    ("usage" in status && status.usage.sessionIsFiveHour === false)
+  );
+}
+
 function plainSegment(status: ProviderStatus): string {
   const label = `${providerIcon(status.name)} ${status.name}`;
   if ("stale" in status) return `${label} —`;
-  const { sessionPercent, weeklyPercent, sessionIsFiveHour } = status.usage;
-  if (status.name === "grok" || sessionIsFiveHour === false)
-    return `${label} ${Math.round(weeklyPercent)}% wk`;
+  const { sessionPercent, weeklyPercent } = status.usage;
+  if (weeklyOnly(status)) return `${label} ${Math.round(weeklyPercent)}% wk`;
   if (status.name === "antigravity")
     return `${label} ${Math.round(sessionPercent)}%`;
   return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
@@ -53,10 +62,9 @@ function plainSegment(status: ProviderStatus): string {
 function footerLine(theme: Theme, status: ProviderStatus): string {
   const segment = plainSegment(status);
   if ("stale" in status) return theme.fg("dim", segment);
-  const percent =
-    status.name === "grok" || status.usage.sessionIsFiveHour === false
-      ? status.usage.weeklyPercent
-      : status.usage.sessionPercent;
+  const percent = weeklyOnly(status)
+    ? status.usage.weeklyPercent
+    : status.usage.sessionPercent;
   return theme.fg(TONE[barColor(percent)], segment);
 }
 
@@ -70,50 +78,6 @@ function sessionCost(ctx: ExtensionContext | undefined): number {
     if (typeof total === "number" && Number.isFinite(total)) cost += total;
   }
   return cost;
-}
-
-function quotaName(provider: string | undefined): string | null {
-  switch (provider) {
-    case "xai":
-      return "grok";
-    case "anthropic":
-      return "claude";
-    case "openai-codex":
-      return "codex";
-    case "google-antigravity":
-      return "antigravity";
-    default:
-      return null;
-  }
-}
-
-function windowsFor(
-  provider: string | undefined,
-  statuses: ProviderStatus[],
-): { fiveHour: WindowUsage | null; week: WindowUsage | null } {
-  const name = quotaName(provider);
-  const status = name ? statuses.find((s) => s.name === name) : undefined;
-  if (!status || "stale" in status) return { fiveHour: null, week: null };
-  const week: WindowUsage = {
-    percent: status.usage.weeklyPercent,
-    resetsInSeconds: status.usage.weeklyResetsInSeconds,
-  };
-  // Grok SuperGrok is a weekly credit pool. Antigravity buckets are request
-  // quotas, not 5h/7d windows. Codex may also lack a 5h primary.
-  const hideFiveHour =
-    name === "grok" ||
-    name === "antigravity" ||
-    status.usage.sessionIsFiveHour === false;
-  if (hideFiveHour) {
-    return { fiveHour: null, week: name === "antigravity" ? null : week };
-  }
-  return {
-    fiveHour: {
-      percent: status.usage.sessionPercent,
-      resetsInSeconds: status.usage.resetsInSeconds,
-    },
-    week,
-  };
 }
 
 function lastCacheWriteAtMs(ctx: ExtensionContext | undefined): number | null {
@@ -158,7 +122,6 @@ export function recentEditedPaths(ctx: ExtensionContext): string[] {
 function snapshotCurrent(
   ctx: ExtensionContext | undefined,
   branch: string | null,
-  statuses: ProviderStatus[],
   worktree: string,
   dirty: boolean,
 ): CurrentSession {
@@ -168,7 +131,6 @@ function snapshotCurrent(
     model?.reasoning && ctx?.thinkingLevel && ctx.thinkingLevel !== "off"
       ? ctx.thinkingLevel
       : null;
-  const windows = windowsFor(model?.provider, statuses);
   return {
     provider: model?.provider ?? "?",
     modelId: model?.id ?? "no-model",
@@ -177,11 +139,8 @@ function snapshotCurrent(
     branch,
     dirty,
     percent: usage?.percent ?? null,
-    tokens: usage?.tokens ?? null,
     contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
     cost: sessionCost(ctx),
-    fiveHour: windows.fiveHour,
-    week: windows.week,
     cacheRemainingSeconds: cacheRemainingSeconds(
       lastCacheWriteAtMs(ctx),
       promptCacheTtlSeconds(model?.provider ?? "", model?.id ?? ""),
@@ -205,18 +164,18 @@ export function renderFooterLines(
 
   const title = "󰐱 limits";
   if (statuses.length === 0) {
-    return [theme.fg("dim", `${title} · loading…`.slice(0, safeWidth))];
+    return [theme.fg("dim", clip(`${title} · loading…`, safeWidth))];
   }
 
-  if (safeWidth <= title.length)
-    return [theme.fg("accent", theme.bold(title.slice(0, safeWidth)))];
+  if (safeWidth <= cells(title))
+    return [theme.fg("accent", theme.bold(clip(title, safeWidth)))];
 
   const sep = " · ";
   const included: ProviderStatus[] = [];
-  let used = title.length;
+  let used = cells(title);
   for (const status of statuses) {
     const seg = plainSegment(status);
-    const next = used + sep.length + seg.length;
+    const next = used + sep.length + cells(seg);
     if (next > safeWidth) break;
     included.push(status);
     used = next;
@@ -303,7 +262,6 @@ export default function (pi: ExtensionAPI) {
           const current = snapshotCurrent(
             ctxRef,
             gitBranch ?? footerData.getGitBranch(),
-            statuses,
             worktree,
             gitDirty,
           );

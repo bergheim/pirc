@@ -31,12 +31,12 @@ import {
 	createLsTool,
 	createReadTool,
 	createWriteTool,
+	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 
 const HOME = homedir();
 const EXPANDED_MAX_LINES = 400;
@@ -55,10 +55,7 @@ const DENSITY_LABEL: Record<Density, string> = {
 };
 
 const SETTINGS_KEY = "compactToolsDensity";
-const SETTINGS_PATH = join(
-	dirname(fileURLToPath(import.meta.url)),
-	"../settings.json",
-);
+const SETTINGS_PATH = join(getAgentDir(), "settings.json");
 
 function loadDensity(): Density {
 	try {

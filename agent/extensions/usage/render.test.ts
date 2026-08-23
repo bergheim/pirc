@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   barColor,
   cacheRemainingSeconds,
+  cells,
   cacheTone,
   currentLineSegments,
   fitSegments,
@@ -31,11 +32,8 @@ const sample: CurrentSession = {
   branch: "master",
   dirty: true,
   percent: 42,
-  tokens: 85400,
   contextWindow: 200000,
   cost: 1.23,
-  fiveHour: { percent: 24, resetsInSeconds: 7200 },
-  week: { percent: 41, resetsInSeconds: 259200 },
   cacheRemainingSeconds: null,
 };
 
@@ -107,14 +105,12 @@ test("current line includes modern session context", () => {
   assert.ok(plains.includes("󰔚 $1.23"));
 });
 
-test("omits thinking, branch, and empty windows", () => {
+test("omits thinking and branch when absent", () => {
   const plains = currentLineSegments({
     ...sample,
     thinking: null,
     branch: null,
     dirty: false,
-    fiveHour: null,
-    week: null,
   }).map((s) => s.plain);
   assert.equal(plains[0], "󰚩 xai/grok-4.6");
   assert.ok(!plains.some((p) => p.includes("master")));
@@ -127,9 +123,9 @@ test("fitSegments drops cost before context", () => {
 
   const cost = segs.find((s) => s.key === "cost")!;
   const widthWithoutCost =
-    segs.reduce((n, s) => n + s.plain.length, 0) +
+    segs.reduce((n, s) => n + cells(s.plain), 0) +
     (segs.length - 1) * 3 -
-    cost.plain.length -
+    cells(cost.plain) -
     3;
   const noCost = fitSegments(segs, widthWithoutCost);
   assert.ok(!noCost.some((s) => s.key === "cost"));
@@ -142,7 +138,7 @@ test("fitSegments drops cost before context", () => {
 
 test("renderCurrentLine stays within width", () => {
   const line = renderCurrentLine(theme, sample, 40);
-  assert.ok(line.length <= 40);
+  assert.ok(cells(line) <= 40);
   assert.ok(line.includes("󰚩 xai/grok-4.6"));
 });
 

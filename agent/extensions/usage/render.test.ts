@@ -17,7 +17,10 @@ import {
 } from "./render.ts";
 import { parseCodexUsage, parseGrokBilling } from "./parse.ts";
 
-const theme = { fg: (_color: string, text: string) => text };
+const theme = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+};
 
 const sample: CurrentSession = {
   provider: "xai",
@@ -63,16 +66,14 @@ test("formatDuration clamps junk", () => {
   assert.equal(formatDuration(259200), "3d");
 });
 
-test("current line includes context and both windows", () => {
+test("current line includes modern session context", () => {
   const plains = currentLineSegments(sample).map((s) => s.plain);
-  assert.equal(plains[0], "[xai/grok-4.6 medium]");
-  assert.ok(plains.includes("jolo"));
-  assert.ok(plains.includes("master"));
-  assert.ok(plains.some((p) => p.includes("42%")));
-  assert.ok(plains.includes("(85k/200k)"));
-  assert.ok(plains.includes("5h 24%→2h"));
-  assert.ok(plains.includes("7d 41%→3d"));
-  assert.ok(plains.includes("$1.23"));
+  assert.equal(plains[0], "󰚩 xai/grok-4.6");
+  assert.ok(plains.includes("󰔛 medium"));
+  assert.ok(plains.includes(" jolo"));
+  assert.ok(plains.includes(" master"));
+  assert.ok(plains.includes("󰍛 ctx 42%/200k"));
+  assert.ok(plains.includes("󰔚 $1.23"));
 });
 
 test("omits thinking, branch, and empty windows", () => {
@@ -83,36 +84,34 @@ test("omits thinking, branch, and empty windows", () => {
     fiveHour: null,
     week: null,
   }).map((s) => s.plain);
-  assert.equal(plains[0], "[xai/grok-4.6]");
-  assert.ok(!plains.includes("master"));
-  assert.ok(!plains.some((p) => p.startsWith("5h") || p.startsWith("7d")));
+  assert.equal(plains[0], "󰚩 xai/grok-4.6");
+  assert.ok(!plains.some((p) => p.includes("master")));
 });
 
-test("fitSegments drops cost before windows and context", () => {
+test("fitSegments drops cost before context", () => {
   const segs = currentLineSegments(sample);
   const full = fitSegments(segs, 200);
-  assert.ok(full.some((s) => s.plain.startsWith("$")));
+  assert.ok(full.some((s) => s.key === "cost"));
 
   const cost = segs.find((s) => s.key === "cost")!;
   const widthWithoutCost =
     segs.reduce((n, s) => n + s.plain.length, 0) +
-    (segs.length - 1) -
+    (segs.length - 1) * 3 -
     cost.plain.length -
-    1;
+    3;
   const noCost = fitSegments(segs, widthWithoutCost);
-  assert.ok(!noCost.some((s) => s.plain.startsWith("$")));
-  assert.ok(noCost.some((s) => s.key === "bar"));
-  assert.ok(noCost.some((s) => s.key === "five" || s.key === "week"));
+  assert.ok(!noCost.some((s) => s.key === "cost"));
+  assert.ok(noCost.some((s) => s.key === "context"));
 
   const modelOnly = fitSegments(segs, 10);
   assert.equal(modelOnly.length, 1);
-  assert.ok(modelOnly[0].plain.startsWith("[xai"));
+  assert.ok(modelOnly[0].plain.startsWith("󰚩 xai"));
 });
 
 test("renderCurrentLine stays within width", () => {
   const line = renderCurrentLine(theme, sample, 40);
   assert.ok(line.length <= 40);
-  assert.ok(line.includes("[xai/grok-4.6 medium]"));
+  assert.ok(line.includes("󰚩 xai/grok-4.6"));
 });
 
 test("cache segment ticks remaining time", () => {
@@ -120,7 +119,7 @@ test("cache segment ticks remaining time", () => {
     ...sample,
     cacheRemainingSeconds: 272,
   }).map((s) => s.plain);
-  assert.ok(plains.includes("cache 4m 32s"));
+  assert.ok(plains.includes("󰒍 cache 4m 32s"));
 });
 
 test("cacheTone yellow then red as it nears", () => {

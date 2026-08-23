@@ -33,16 +33,31 @@ function line(status: ProviderStatus): string {
 // Uncolored text only: width budgeting (renderFooterLines) measures this,
 // never the ANSI-wrapped result, so a color escape sequence can never be
 // sliced in half by a width cut.
+function providerIcon(name: string): string {
+  if (name === "grok") return "𝕏";
+  if (name === "antigravity") return "󰊭";
+  return "󰚩";
+}
+
 function plainSegment(status: ProviderStatus): string {
-  if ("stale" in status) return `${status.name} —`;
-  const bar = renderBar(status.usage.sessionPercent, 6);
-  return `${status.name} ${bar}`;
+  const label = `${providerIcon(status.name)} ${status.name}`;
+  if ("stale" in status) return `${label} —`;
+  const { sessionPercent, weeklyPercent, sessionIsFiveHour } = status.usage;
+  if (status.name === "grok" || sessionIsFiveHour === false)
+    return `${label} ${Math.round(weeklyPercent)}% wk`;
+  if (status.name === "antigravity")
+    return `${label} ${Math.round(sessionPercent)}%`;
+  return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
 }
 
 function footerLine(theme: Theme, status: ProviderStatus): string {
   const segment = plainSegment(status);
   if ("stale" in status) return theme.fg("dim", segment);
-  return theme.fg(TONE[barColor(status.usage.sessionPercent)], segment);
+  const percent =
+    status.name === "grok" || status.usage.sessionIsFiveHour === false
+      ? status.usage.weeklyPercent
+      : status.usage.sessionPercent;
+  return theme.fg(TONE[barColor(percent)], segment);
 }
 
 function sessionCost(ctx: ExtensionContext | undefined): number {
@@ -119,6 +134,7 @@ function snapshotCurrent(
   ctx: ExtensionContext | undefined,
   branch: string | null,
   statuses: ProviderStatus[],
+  worktree: string,
 ): CurrentSession {
   const model = ctx?.model;
   const usage = ctx?.getContextUsage();
@@ -131,7 +147,7 @@ function snapshotCurrent(
     provider: model?.provider ?? "?",
     modelId: model?.id ?? "no-model",
     thinking,
-    dir: ctx?.cwd ? basename(ctx.cwd) : "",
+    dir: worktree,
     branch,
     percent: usage?.percent ?? null,
     tokens: usage?.tokens ?? null,
@@ -160,24 +176,29 @@ export function renderFooterLines(
 ): string[] {
   const safeWidth = Math.max(0, width);
 
+  const title = "󰐱 limits";
   if (statuses.length === 0) {
-    return [theme.fg("dim", "usage: loading…".slice(0, safeWidth))];
+    return [theme.fg("dim", `${title} · loading…`.slice(0, safeWidth))];
   }
 
-  const sep = "  ";
+  if (safeWidth <= title.length)
+    return [theme.fg("accent", theme.bold(title.slice(0, safeWidth)))];
+
+  const sep = " · ";
   const included: ProviderStatus[] = [];
-  let used = 0;
+  let used = title.length;
   for (const status of statuses) {
     const seg = plainSegment(status);
-    const next = used + (included.length > 0 ? sep.length : 0) + seg.length;
+    const next = used + sep.length + seg.length;
     if (next > safeWidth) break;
     included.push(status);
     used = next;
   }
 
-  if (included.length === 0) return [""];
-
-  const parts = included.map((s) => footerLine(theme, s));
+  const parts = [
+    theme.fg("accent", theme.bold(title)),
+    ...included.map((s) => footerLine(theme, s)),
+  ];
   const omitted = statuses.length - included.length;
   if (omitted > 0) {
     const marker = `+${omitted}`;
@@ -203,6 +224,7 @@ export default function (pi: ExtensionAPI) {
   let statuses: ProviderStatus[] = [];
   let requestRender: (() => void) | undefined;
   let ctxRef: ExtensionContext | undefined;
+  let worktree = "";
 
   async function refresh(): Promise<void> {
     statuses = await fetchAll();
@@ -232,6 +254,7 @@ export default function (pi: ExtensionAPI) {
             ctxRef,
             footerData.getGitBranch(),
             statuses,
+            worktree,
           );
           if (current.cacheRemainingSeconds !== null) {
             if (tick === undefined)
@@ -240,6 +263,7 @@ export default function (pi: ExtensionAPI) {
             stopTick();
           }
           return [
+            "",
             renderCurrentLine(theme, current, width),
             ...renderFooterLines(theme, statuses, width),
           ];
@@ -249,6 +273,14 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    worktree = basename(ctx.cwd);
+    const root = await pi.exec(
+      "git",
+      ["-C", ctx.cwd, "rev-parse", "--show-toplevel"],
+      { timeout: 2000 },
+    );
+    if (root.code === 0 && root.stdout.trim())
+      worktree = basename(root.stdout.trim());
     paintFooter(ctx);
     await refresh();
   });

@@ -90,6 +90,20 @@ type Theme = {
 	bold: (text: string) => string;
 };
 
+const TOOL_ICON = {
+	bash: "",
+	read: "󰈙",
+	grep: "",
+	find: "󰈞",
+	ls: "󰉋",
+	edit: "",
+	write: "",
+} as const;
+
+function toolTitle(theme: Theme, name: keyof typeof TOOL_ICON): string {
+	return theme.fg("toolTitle", theme.bold(`${TOOL_ICON[name]} ${name}`));
+}
+
 function truncate(s: string, max: number): string {
 	const one = s.replace(/\s+/g, " ").trim();
 	if (one.length <= max) return one;
@@ -274,8 +288,7 @@ export default function (pi: ExtensionAPI) {
 		renderCall(args, theme, context) {
 			const cmd = args?.command == null ? "" : String(args.command);
 			const commandDisplay = cmd || "...";
-			let line = theme.fg("toolTitle", theme.bold(" bash"));
-			line += ` ${theme.fg("toolOutput", commandDisplay)}`;
+			let line = `${toolTitle(theme, "bash")} ${theme.fg("toolOutput", commandDisplay)}`;
 			if (args?.timeout != null) {
 				line += theme.fg("muted", ` (timeout ${args.timeout}s)`);
 			}
@@ -338,7 +351,7 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme, context) {
 			const path = displayPath(args?.path ?? args?.file_path, cwdOf(context));
-			let line = `${theme.fg("toolTitle", theme.bold("read"))} ${path}`;
+			let line = `${toolTitle(theme, "read")} ${theme.fg("toolOutput", path)}`;
 			if (args?.offset != null || args?.limit != null) {
 				const parts: string[] = [];
 				if (args?.offset != null) parts.push(`offset=${args.offset}`);
@@ -403,18 +416,17 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme, context) {
-			// Shell-prompt style: $ grep pattern [path] [glob]
 			const pattern = args?.pattern == null ? "" : String(args.pattern);
 			const path =
 				args?.path == null
 					? undefined
 					: displayPath(String(args.path), cwdOf(context));
-			const parts = ["grep", pattern || "..."];
+			const parts = [pattern || "..."];
 			if (path) parts.push(path);
 			if (args?.glob) parts.push(String(args.glob));
 			return callText(
 				context,
-				theme.fg("toolTitle", theme.bold(`$ ${parts.join(" ")}`)),
+				`${toolTitle(theme, "grep")} ${theme.fg("toolOutput", parts.join(" "))}`,
 			);
 		},
 
@@ -471,12 +483,11 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme, context) {
-			// Shell-prompt style: $ find <path> -name pattern  (approx)
 			const pattern = args?.pattern == null ? "..." : String(args.pattern);
 			const path = displayPath(args?.path, cwdOf(context));
 			return callText(
 				context,
-				theme.fg("toolTitle", theme.bold(`$ find ${path} ${pattern}`)),
+				`${toolTitle(theme, "find")} ${theme.fg("toolOutput", `${path} ${pattern}`)}`,
 			);
 		},
 
@@ -531,14 +542,13 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme, context) {
-			// Shell-prompt style — what you type at a prompt, e.g. `$ ls ~/Downloads`
 			const raw = args?.path == null ? "." : String(args.path);
 			// Prefer the arg as the model wrote it (keeps ~); fall back to displayPath.
 			const path =
 				raw.startsWith("~") || raw.startsWith("/")
 					? raw
 					: displayPath(raw, cwdOf(context));
-			let line = theme.fg("toolTitle", theme.bold(`$ ls ${path}`));
+			let line = `${toolTitle(theme, "ls")} ${theme.fg("toolOutput", path)}`;
 			if (args?.limit != null) line += theme.fg("muted", ` (limit ${args.limit})`);
 			return callText(context, line);
 		},
@@ -597,7 +607,7 @@ export default function (pi: ExtensionAPI) {
 			const path = displayPath(args?.path ?? args?.file_path, cwdOf(context));
 			return callText(
 				context,
-				`${theme.fg("toolTitle", theme.bold("edit"))} ${path}`,
+				`${toolTitle(theme, "edit")} ${theme.fg("toolOutput", path)}`,
 			);
 		},
 
@@ -680,7 +690,7 @@ export default function (pi: ExtensionAPI) {
 			const path = displayPath(args?.path ?? args?.file_path, cwdOf(context));
 			return callText(
 				context,
-				`${theme.fg("toolTitle", theme.bold("write"))} ${path}`,
+				`${toolTitle(theme, "write")} ${theme.fg("toolOutput", path)}`,
 			);
 		},
 

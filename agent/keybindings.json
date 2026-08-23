@@ -4,5 +4,6 @@
   "tui.input.newLine": ["ctrl+j", "alt+enter"],
   "app.message.followUp": ["shift+alt+enter", "shift+enter"],
   "app.tree.filter.userOnly": "alt+u",
-  "tui.altScreen.search": "ctrl+r"
+  "tui.altScreen.search": "ctrl+r",
+  "tui.editor.cursorLeft": ["left"]
 }

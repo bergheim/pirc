@@ -1,13 +1,12 @@
 {
-  "tui.select.up": ["up", "ctrl+k"],
-  "tui.select.down": ["down", "ctrl+j"],
-  "tui.input.newLine": ["ctrl+j", "alt+enter"],
-  "app.message.followUp": ["shift+alt+enter", "shift+enter"],
-  "app.session.tree": ["ctrl+t"],
-  "app.thinking.toggle": ["ctrl+shift+h"],
-  "tui.altScreen.search": ["ctrl+r", "ctrl+f"],
-  "tui.editor.cursorRight": ["right"],
-  "tui.editor.cursorLeft": ["left"],
-  "app.tools.expand": ["ctrl+o"],
-  "app.tree.filter.userOnly": "alt+u"
+	"tui.select.up": ["up", "ctrl+k"],
+	"tui.select.down": ["down", "ctrl+j"],
+	"tui.input.newLine": ["ctrl+j", "alt+enter"],
+	"app.message.followUp": ["shift+alt+enter", "shift+enter"],
+	"app.session.tree": ["ctrl+t"],
+	"app.thinking.toggle": ["ctrl+shift+h"],
+	"tui.altScreen.search": ["ctrl+r", "ctrl+f"],
+	"tui.editor.cursorRight": ["right"],
+	"tui.editor.cursorLeft": ["left"],
+	"app.tools.expand": ["ctrl+o"]
 }

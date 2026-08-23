@@ -1,6 +1,6 @@
 {
   "lastChangelogVersion": "0.84.2",
-  "theme": "crew-catppuccin-latte",
+  "theme": "crew-solarized-light",
   "defaultProvider": "xai",
   "defaultModel": "grok-4.6",
   "npmCommand": [
@@ -25,5 +25,6 @@
     "git:github.com/DietrichGebert/ponytail"
   ],
   "hideThinkingBlock": false,
-  "defaultThinkingLevel": "medium"
+  "defaultThinkingLevel": "medium",
+  "compactToolsDensity": "title"
 }

@@ -1,4 +1,7 @@
-export type Theme = { fg(color: string, text: string): string };
+export type Theme = {
+  fg(color: string, text: string): string;
+  bold(text: string): string;
+};
 
 // barColor speaks red/yellow/green; the theme only knows semantic slots.
 export const TONE = {
@@ -7,23 +10,16 @@ export const TONE = {
   green: "success",
 } as const;
 
-export type WindowUsage = {
-  percent: number;
-  resetsInSeconds: number | null;
-};
-
 export type CurrentSession = {
   provider: string;
   modelId: string;
   thinking: string | null;
   dir: string;
   branch: string | null;
+  dirty: boolean;
   percent: number | null;
-  tokens: number | null;
   contextWindow: number;
   cost: number;
-  fiveHour: WindowUsage | null;
-  week: WindowUsage | null;
   cacheRemainingSeconds: number | null;
 };
 
@@ -108,6 +104,17 @@ export function cacheRemainingSeconds(
   return Math.ceil(left);
 }
 
+// Nerd Font glyphs sit above the BMP: one terminal cell, two UTF-16 units.
+// Measure and cut by code point so the footer neither under-fills nor slices
+// a surrogate pair in half.
+export function cells(s: string): number {
+  return Array.from(s).length;
+}
+
+export function clip(s: string, width: number): string {
+  return Array.from(s).slice(0, Math.max(0, width)).join("");
+}
+
 export function formatK(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "0";
   if (n < 1000) return String(Math.round(n));
@@ -122,68 +129,53 @@ type Segment = {
 };
 
 function modelTag(session: CurrentSession): string {
-  const think = session.thinking ? ` ${session.thinking}` : "";
-  return `[${session.provider}/${session.modelId}${think}]`;
-}
-
-function windowPlain(label: string, win: WindowUsage): string {
-  const reset =
-    win.resetsInSeconds === null
-      ? ""
-      : `→${formatDuration(win.resetsInSeconds)}`;
-  return `${label} ${Math.round(win.percent)}%${reset}`;
+  return `󰚩 ${session.provider}/${session.modelId}`;
 }
 
 export function currentLineSegments(session: CurrentSession): Segment[] {
   const percentLabel =
     session.percent === null ? "?" : `${Math.round(session.percent)}`;
-  const tokenLabel = session.tokens === null ? "?" : formatK(session.tokens);
   const segs: Segment[] = [
     { key: "model", plain: modelTag(session), tone: "accent", keep: 100 },
   ];
+  if (session.thinking)
+    segs.push({
+      key: "thinking",
+      plain: `󰔛 ${session.thinking}`,
+      tone: "dim",
+      keep: 70,
+    });
   if (session.dir)
-    segs.push({ key: "dir", plain: session.dir, tone: null, keep: 20 });
+    segs.push({
+      key: "dir",
+      plain: ` ${session.dir}`,
+      tone: "accent",
+      keep: 85,
+    });
   if (session.branch)
-    segs.push({ key: "branch", plain: session.branch, tone: "dim", keep: 10 });
+    segs.push({
+      key: "branch",
+      plain: ` ${session.branch}${session.dirty ? " ●" : ""}`,
+      tone: null,
+      keep: 80,
+    });
   segs.push({
-    key: "bar",
-    plain: `${renderBar(session.percent ?? 0)} ${percentLabel}%`,
+    key: "context",
+    plain: `󰍛 ctx ${percentLabel}%/${formatK(session.contextWindow)}`,
     tone: session.percent === null ? "dim" : TONE[barColor(session.percent)],
-    keep: 80,
+    keep: 90,
   });
-  segs.push({
-    key: "tokens",
-    plain: `(${tokenLabel}/${formatK(session.contextWindow)})`,
-    tone: "dim",
-    keep: 70,
-  });
-  if (session.fiveHour) {
-    segs.push({
-      key: "five",
-      plain: windowPlain("5h", session.fiveHour),
-      tone: TONE[barColor(session.fiveHour.percent)],
-      keep: 60,
-    });
-  }
-  if (session.week) {
-    segs.push({
-      key: "week",
-      plain: windowPlain("7d", session.week),
-      tone: TONE[barColor(session.week.percent)],
-      keep: 50,
-    });
-  }
   if (session.cacheRemainingSeconds !== null) {
     segs.push({
       key: "cache",
-      plain: `cache ${formatRemaining(session.cacheRemainingSeconds)}`,
+      plain: `󰒍 cache ${formatRemaining(session.cacheRemainingSeconds)}`,
       tone: cacheTone(session.cacheRemainingSeconds),
       keep: 55,
     });
   }
   segs.push({
     key: "cost",
-    plain: `$${session.cost.toFixed(2)}`,
+    plain: `󰔚 $${session.cost.toFixed(2)}`,
     tone: "warning",
     keep: 5,
   });
@@ -192,7 +184,7 @@ export function currentLineSegments(session: CurrentSession): Segment[] {
 
 function segmentsWidth(segs: Segment[]): number {
   if (segs.length === 0) return 0;
-  return segs.reduce((n, s) => n + s.plain.length, 0) + (segs.length - 1);
+  return segs.reduce((n, s) => n + cells(s.plain), 0) + (segs.length - 1) * 3;
 }
 
 export function fitSegments(segs: Segment[], width: number): Segment[] {
@@ -209,14 +201,15 @@ export function fitSegments(segs: Segment[], width: number): Segment[] {
   if (included.length === 1 && segmentsWidth(included) > safeWidth) {
     included[0] = {
       ...included[0],
-      plain: included[0].plain.slice(0, safeWidth),
+      plain: clip(included[0].plain, safeWidth),
     };
   }
   return included;
 }
 
 function paint(theme: Theme, seg: Segment): string {
-  return seg.tone ? theme.fg(seg.tone, seg.plain) : seg.plain;
+  const text = seg.key === "model" ? theme.bold(seg.plain) : seg.plain;
+  return seg.tone ? theme.fg(seg.tone, text) : text;
 }
 
 export function renderCurrentLine(
@@ -226,5 +219,5 @@ export function renderCurrentLine(
 ): string {
   return fitSegments(currentLineSegments(session), width)
     .map((s) => paint(theme, s))
-    .join(" ");
+    .join(theme.fg("dim", " · "));
 }

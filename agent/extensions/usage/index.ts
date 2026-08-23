@@ -2,11 +2,13 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { basename } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fetchAll, type ProviderStatus } from "./core.ts";
 import {
   renderBar,
   barColor,
+  cells,
+  clip,
   formatDuration,
   renderCurrentLine,
   TONE,
@@ -14,7 +16,6 @@ import {
   promptCacheTtlSeconds,
   type CurrentSession,
   type Theme,
-  type WindowUsage,
 } from "./render.ts";
 
 function line(status: ProviderStatus): string {
@@ -33,16 +34,38 @@ function line(status: ProviderStatus): string {
 // Uncolored text only: width budgeting (renderFooterLines) measures this,
 // never the ANSI-wrapped result, so a color escape sequence can never be
 // sliced in half by a width cut.
+function providerIcon(name: string): string {
+  if (name === "grok") return "𝕏";
+  if (name === "antigravity") return "󰊭";
+  return "󰚩";
+}
+
+// Grok SuperGrok is a weekly credit pool, and some Codex plans report no 5h
+// primary — both lead with the weekly number instead of the session one.
+function weeklyOnly(status: ProviderStatus): boolean {
+  return (
+    status.name === "grok" ||
+    ("usage" in status && status.usage.sessionIsFiveHour === false)
+  );
+}
+
 function plainSegment(status: ProviderStatus): string {
-  if ("stale" in status) return `${status.name} —`;
-  const bar = renderBar(status.usage.sessionPercent, 6);
-  return `${status.name} ${bar}`;
+  const label = `${providerIcon(status.name)} ${status.name}`;
+  if ("stale" in status) return `${label} —`;
+  const { sessionPercent, weeklyPercent } = status.usage;
+  if (weeklyOnly(status)) return `${label} ${Math.round(weeklyPercent)}% wk`;
+  if (status.name === "antigravity")
+    return `${label} ${Math.round(sessionPercent)}%`;
+  return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
 }
 
 function footerLine(theme: Theme, status: ProviderStatus): string {
   const segment = plainSegment(status);
   if ("stale" in status) return theme.fg("dim", segment);
-  return theme.fg(TONE[barColor(status.usage.sessionPercent)], segment);
+  const percent = weeklyOnly(status)
+    ? status.usage.weeklyPercent
+    : status.usage.sessionPercent;
+  return theme.fg(TONE[barColor(percent)], segment);
 }
 
 function sessionCost(ctx: ExtensionContext | undefined): number {
@@ -55,50 +78,6 @@ function sessionCost(ctx: ExtensionContext | undefined): number {
     if (typeof total === "number" && Number.isFinite(total)) cost += total;
   }
   return cost;
-}
-
-function quotaName(provider: string | undefined): string | null {
-  switch (provider) {
-    case "xai":
-      return "grok";
-    case "anthropic":
-      return "claude";
-    case "openai-codex":
-      return "codex";
-    case "google-antigravity":
-      return "antigravity";
-    default:
-      return null;
-  }
-}
-
-function windowsFor(
-  provider: string | undefined,
-  statuses: ProviderStatus[],
-): { fiveHour: WindowUsage | null; week: WindowUsage | null } {
-  const name = quotaName(provider);
-  const status = name ? statuses.find((s) => s.name === name) : undefined;
-  if (!status || "stale" in status) return { fiveHour: null, week: null };
-  const week: WindowUsage = {
-    percent: status.usage.weeklyPercent,
-    resetsInSeconds: status.usage.weeklyResetsInSeconds,
-  };
-  // Grok SuperGrok is a weekly credit pool. Antigravity buckets are request
-  // quotas, not 5h/7d windows. Codex may also lack a 5h primary.
-  const hideFiveHour =
-    name === "grok" ||
-    name === "antigravity" ||
-    status.usage.sessionIsFiveHour === false;
-  if (hideFiveHour) {
-    return { fiveHour: null, week: name === "antigravity" ? null : week };
-  }
-  return {
-    fiveHour: {
-      percent: status.usage.sessionPercent,
-      resetsInSeconds: status.usage.resetsInSeconds,
-    },
-    week,
-  };
 }
 
 function lastCacheWriteAtMs(ctx: ExtensionContext | undefined): number | null {
@@ -115,10 +94,36 @@ function lastCacheWriteAtMs(ctx: ExtensionContext | undefined): number | null {
   return null;
 }
 
+export function recentEditedPaths(ctx: ExtensionContext): string[] {
+  const paths: string[] = [];
+  const entries = ctx.sessionManager.getBranch();
+  for (let i = entries.length - 1; i >= 0 && paths.length < 10; i--) {
+    const entry = entries[i];
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const content = entry.message.content;
+    for (let j = content.length - 1; j >= 0 && paths.length < 10; j--) {
+      const item = content[j] as {
+        type?: string;
+        name?: string;
+        arguments?: { path?: unknown };
+      };
+      if (
+        item.type === "toolCall" &&
+        (item.name === "edit" || item.name === "write") &&
+        typeof item.arguments?.path === "string" &&
+        !paths.includes(item.arguments.path)
+      )
+        paths.push(item.arguments.path);
+    }
+  }
+  return paths;
+}
+
 function snapshotCurrent(
   ctx: ExtensionContext | undefined,
   branch: string | null,
-  statuses: ProviderStatus[],
+  worktree: string,
+  dirty: boolean,
 ): CurrentSession {
   const model = ctx?.model;
   const usage = ctx?.getContextUsage();
@@ -126,19 +131,16 @@ function snapshotCurrent(
     model?.reasoning && ctx?.thinkingLevel && ctx.thinkingLevel !== "off"
       ? ctx.thinkingLevel
       : null;
-  const windows = windowsFor(model?.provider, statuses);
   return {
     provider: model?.provider ?? "?",
     modelId: model?.id ?? "no-model",
     thinking,
-    dir: ctx?.cwd ? basename(ctx.cwd) : "",
+    dir: worktree,
     branch,
+    dirty,
     percent: usage?.percent ?? null,
-    tokens: usage?.tokens ?? null,
     contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
     cost: sessionCost(ctx),
-    fiveHour: windows.fiveHour,
-    week: windows.week,
     cacheRemainingSeconds: cacheRemainingSeconds(
       lastCacheWriteAtMs(ctx),
       promptCacheTtlSeconds(model?.provider ?? "", model?.id ?? ""),
@@ -160,24 +162,29 @@ export function renderFooterLines(
 ): string[] {
   const safeWidth = Math.max(0, width);
 
+  const title = "󰐱 limits";
   if (statuses.length === 0) {
-    return [theme.fg("dim", "usage: loading…".slice(0, safeWidth))];
+    return [theme.fg("dim", clip(`${title} · loading…`, safeWidth))];
   }
 
-  const sep = "  ";
+  if (safeWidth <= cells(title))
+    return [theme.fg("accent", theme.bold(clip(title, safeWidth)))];
+
+  const sep = " · ";
   const included: ProviderStatus[] = [];
-  let used = 0;
+  let used = cells(title);
   for (const status of statuses) {
     const seg = plainSegment(status);
-    const next = used + (included.length > 0 ? sep.length : 0) + seg.length;
+    const next = used + sep.length + cells(seg);
     if (next > safeWidth) break;
     included.push(status);
     used = next;
   }
 
-  if (included.length === 0) return [""];
-
-  const parts = included.map((s) => footerLine(theme, s));
+  const parts = [
+    theme.fg("accent", theme.bold(title)),
+    ...included.map((s) => footerLine(theme, s)),
+  ];
   const omitted = statuses.length - included.length;
   if (omitted > 0) {
     const marker = `+${omitted}`;
@@ -203,6 +210,30 @@ export default function (pi: ExtensionAPI) {
   let statuses: ProviderStatus[] = [];
   let requestRender: (() => void) | undefined;
   let ctxRef: ExtensionContext | undefined;
+  let worktree = "";
+  let gitBranch: string | null = null;
+  let gitRoot: string | null = null;
+  let gitDirty = false;
+
+  async function updateRepo(directory: string): Promise<boolean> {
+    const result = await pi.exec(
+      "git",
+      ["-C", directory, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD"],
+      { timeout: 2000 },
+    );
+    if (result.code !== 0) return false;
+    const [root, branch] = result.stdout.trim().split("\n");
+    if (!root || !branch) return false;
+    gitRoot = root;
+    gitBranch = branch;
+    worktree = basename(root);
+    const status = await pi.exec("git", ["-C", root, "status", "--porcelain"], {
+      timeout: 2000,
+    });
+    gitDirty = status.code === 0 && status.stdout.trim().length > 0;
+    requestRender?.();
+    return true;
+  }
 
   async function refresh(): Promise<void> {
     statuses = await fetchAll();
@@ -230,8 +261,9 @@ export default function (pi: ExtensionAPI) {
         render(width: number): string[] {
           const current = snapshotCurrent(
             ctxRef,
-            footerData.getGitBranch(),
-            statuses,
+            gitBranch ?? footerData.getGitBranch(),
+            worktree,
+            gitDirty,
           );
           if (current.cacheRemainingSeconds !== null) {
             if (tick === undefined)
@@ -240,6 +272,7 @@ export default function (pi: ExtensionAPI) {
             stopTick();
           }
           return [
+            "",
             renderCurrentLine(theme, current, width),
             ...renderFooterLines(theme, statuses, width),
           ];
@@ -249,7 +282,16 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    worktree = basename(ctx.cwd);
+    gitBranch = null;
+    gitRoot = null;
+    gitDirty = false;
     paintFooter(ctx);
+    if (!(await updateRepo(ctx.cwd))) {
+      for (const path of recentEditedPaths(ctx)) {
+        if (await updateRepo(dirname(resolve(ctx.cwd, path)))) break;
+      }
+    }
     await refresh();
   });
 
@@ -264,6 +306,25 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (_event, ctx) => {
     ctxRef = ctx;
     requestRender?.();
+  });
+  pi.on("tool_result", async (event, ctx) => {
+    if (event.isError) return;
+    const path = (event.input as { path?: unknown }).path;
+    if (
+      (event.toolName === "edit" || event.toolName === "write") &&
+      typeof path === "string"
+    ) {
+      await updateRepo(dirname(resolve(ctx.cwd, path)));
+      return;
+    }
+    const command = (event.input as { command?: unknown }).command;
+    if (
+      event.toolName === "bash" &&
+      gitRoot &&
+      typeof command === "string" &&
+      /(?:^|[;&|\s])git(?:\s|$)/.test(command)
+    )
+      await updateRepo(gitRoot);
   });
 
   // Quota moves as turns run; re-fetch before each one. fetchAll's own

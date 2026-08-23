@@ -6,8 +6,9 @@
  *   preview — header + stock-ish collapsed preview (~5–10 lines)
  *   full    — header + entire tool output
  *
- * renderCall matches stock headers (bash: `$ command`).
- * renderResult is overridden for density. Execution stays stock.
+ * renderCall draws an icon-led one-line header; long paths and free-text args
+ * are shortened so it stays one line. renderResult is overridden for density.
+ * Execution stays stock.
  *
  * Covers: bash, read, grep, find, ls, edit, write.
  * Does not affect interactive `!` bang-bash.
@@ -35,16 +36,21 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join } from "node:path";
+import { displayPath } from "./paths.ts";
 
-const HOME = homedir();
 const EXPANDED_MAX_LINES = 400;
 /** Matches stock bash tool collapsed preview. */
 const PREVIEW_BASH_LINES = 5;
 /** Matches stock generic tool collapsed preview. */
 const PREVIEW_GENERIC_LINES = 10;
 const PREVIEW_DIFF_LINES = 30;
+/**
+ * Free-text call args — a command, a search pattern — clipped so the title
+ * density keeps its one-line promise. truncate() also folds newlines, which
+ * is what a heredoc or a multi-line && chain would otherwise smuggle in.
+ */
+const CALL_ARG_MAX = 100;
 
 type Density = "title" | "preview" | "full";
 const DENSITY_ORDER: Density[] = ["title", "preview", "full"];
@@ -129,16 +135,6 @@ function cwdOf(ctx: { cwd?: string } | undefined): string {
 }
 
 /** Stock-ish path display (relative to cwd, else ~). */
-function displayPath(path: string | undefined, cwd: string): string {
-	if (!path) return ".";
-	const abs = resolve(cwd, path);
-	if (abs === cwd) return ".";
-	const rel = relative(cwd, abs);
-	if (rel && !rel.startsWith("..") && !rel.startsWith("/")) return rel;
-	if (abs.startsWith(HOME + "/")) return "~" + abs.slice(HOME.length);
-	return path;
-}
-
 /** Reuse last Text component like stock renderers. */
 function callText(context: { lastComponent?: unknown }, line: string): Text {
 	const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
@@ -284,7 +280,7 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme, context) {
 			const cmd = args?.command == null ? "" : String(args.command);
-			const commandDisplay = cmd || "...";
+			const commandDisplay = cmd ? truncate(cmd, CALL_ARG_MAX) : "...";
 			let line = `${toolTitle(theme, "bash")} ${theme.fg("toolOutput", commandDisplay)}`;
 			if (args?.timeout != null) {
 				line += theme.fg("muted", ` (timeout ${args.timeout}s)`);
@@ -418,7 +414,7 @@ export default function (pi: ExtensionAPI) {
 				args?.path == null
 					? undefined
 					: displayPath(String(args.path), cwdOf(context));
-			const parts = [pattern || "..."];
+			const parts = [pattern ? truncate(pattern, CALL_ARG_MAX) : "..."];
 			if (path) parts.push(path);
 			if (args?.glob) parts.push(String(args.glob));
 			return callText(
@@ -480,7 +476,10 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme, context) {
-			const pattern = args?.pattern == null ? "..." : String(args.pattern);
+			const pattern =
+				args?.pattern == null
+					? "..."
+					: truncate(String(args.pattern), CALL_ARG_MAX);
 			const path = displayPath(args?.path, cwdOf(context));
 			return callText(
 				context,
@@ -540,11 +539,7 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme, context) {
 			const raw = args?.path == null ? "." : String(args.path);
-			// Prefer the arg as the model wrote it (keeps ~); fall back to displayPath.
-			const path =
-				raw.startsWith("~") || raw.startsWith("/")
-					? raw
-					: displayPath(raw, cwdOf(context));
+			const path = displayPath(raw, cwdOf(context));
 			let line = `${toolTitle(theme, "ls")} ${theme.fg("toolOutput", path)}`;
 			if (args?.limit != null) line += theme.fg("muted", ` (limit ${args.limit})`);
 			return callText(context, line);

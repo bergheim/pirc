@@ -21,6 +21,7 @@ export type CurrentSession = {
   thinking: string | null;
   dir: string;
   branch: string | null;
+  dirty: boolean;
   percent: number | null;
   tokens: number | null;
   contextWindow: number;
@@ -151,7 +152,7 @@ export function currentLineSegments(session: CurrentSession): Segment[] {
   if (session.branch)
     segs.push({
       key: "branch",
-      plain: ` ${session.branch}`,
+      plain: ` ${session.branch}${session.dirty ? " ●" : ""}`,
       tone: null,
       keep: 80,
     });

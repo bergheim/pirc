@@ -160,6 +160,7 @@ function snapshotCurrent(
   branch: string | null,
   statuses: ProviderStatus[],
   worktree: string,
+  dirty: boolean,
 ): CurrentSession {
   const model = ctx?.model;
   const usage = ctx?.getContextUsage();
@@ -174,6 +175,7 @@ function snapshotCurrent(
     thinking,
     dir: worktree,
     branch,
+    dirty,
     percent: usage?.percent ?? null,
     tokens: usage?.tokens ?? null,
     contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
@@ -252,6 +254,7 @@ export default function (pi: ExtensionAPI) {
   let worktree = "";
   let gitBranch: string | null = null;
   let gitRoot: string | null = null;
+  let gitDirty = false;
 
   async function updateRepo(directory: string): Promise<boolean> {
     const result = await pi.exec(
@@ -265,6 +268,10 @@ export default function (pi: ExtensionAPI) {
     gitRoot = root;
     gitBranch = branch;
     worktree = basename(root);
+    const status = await pi.exec("git", ["-C", root, "status", "--porcelain"], {
+      timeout: 2000,
+    });
+    gitDirty = status.code === 0 && status.stdout.trim().length > 0;
     requestRender?.();
     return true;
   }
@@ -298,6 +305,7 @@ export default function (pi: ExtensionAPI) {
             gitBranch ?? footerData.getGitBranch(),
             statuses,
             worktree,
+            gitDirty,
           );
           if (current.cacheRemainingSeconds !== null) {
             if (tick === undefined)
@@ -319,6 +327,7 @@ export default function (pi: ExtensionAPI) {
     worktree = basename(ctx.cwd);
     gitBranch = null;
     gitRoot = null;
+    gitDirty = false;
     paintFooter(ctx);
     if (!(await updateRepo(ctx.cwd))) {
       for (const path of recentEditedPaths(ctx)) {

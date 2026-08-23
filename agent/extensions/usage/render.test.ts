@@ -29,6 +29,7 @@ const sample: CurrentSession = {
   thinking: "medium",
   dir: "jolo",
   branch: "master",
+  dirty: true,
   percent: 42,
   tokens: 85400,
   contextWindow: 200000,
@@ -101,7 +102,7 @@ test("current line includes modern session context", () => {
   assert.equal(plains[0], "󰚩 xai/grok-4.6");
   assert.ok(plains.includes("󰔛 medium"));
   assert.ok(plains.includes(" jolo"));
-  assert.ok(plains.includes(" master"));
+  assert.ok(plains.includes(" master ●"));
   assert.ok(plains.includes("󰍛 ctx 42%/200k"));
   assert.ok(plains.includes("󰔚 $1.23"));
 });
@@ -111,6 +112,7 @@ test("omits thinking, branch, and empty windows", () => {
     ...sample,
     thinking: null,
     branch: null,
+    dirty: false,
     fiveHour: null,
     week: null,
   }).map((s) => s.plain);

@@ -33,8 +33,10 @@ import {
 	createWriteTool,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const HOME = homedir();
 const EXPANDED_MAX_LINES = 400;
@@ -52,7 +54,36 @@ const DENSITY_LABEL: Record<Density, string> = {
 	full: "full",
 };
 
-let density: Density = "title";
+const SETTINGS_KEY = "compactToolsDensity";
+const SETTINGS_PATH = join(
+	dirname(fileURLToPath(import.meta.url)),
+	"../settings.json",
+);
+
+function loadDensity(): Density {
+	try {
+		const raw = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
+		const value = raw?.[SETTINGS_KEY];
+		if (value === "title" || value === "preview" || value === "full")
+			return value;
+	} catch {
+		// missing or junk settings: keep the built-in default
+	}
+	return "title";
+}
+
+function saveDensity(next: Density): void {
+	try {
+		const raw = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
+		if (!raw || typeof raw !== "object" || Array.isArray(raw)) return;
+		raw[SETTINGS_KEY] = next;
+		writeFileSync(SETTINGS_PATH, `${JSON.stringify(raw, null, 2)}\n`);
+	} catch {
+		// settings write is best-effort; density still applies this session
+	}
+}
+
+let density: Density = loadDensity();
 
 type Theme = {
 	fg: (key: string, text: string) => string;
@@ -162,6 +193,7 @@ function refreshTools(ctx: ExtensionContext) {
 
 function setDensity(ctx: ExtensionContext, next: Density) {
 	density = next;
+	saveDensity(next);
 	refreshTools(ctx);
 }
 
@@ -213,6 +245,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		density = loadDensity();
+		ctx.ui.setToolsExpanded(density === "full");
 		ctx.ui.setStatus(
 			"compact-tools",
 			ctx.ui.theme.fg("muted", `tools:${density}`),

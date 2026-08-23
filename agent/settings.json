@@ -25,5 +25,6 @@
     "git:github.com/DietrichGebert/ponytail"
   ],
   "hideThinkingBlock": false,
-  "defaultThinkingLevel": "medium"
+  "defaultThinkingLevel": "medium",
+  "compactToolsDensity": "title"
 }

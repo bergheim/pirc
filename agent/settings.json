@@ -21,7 +21,8 @@
     "npm:pi-system-prompt",
     "npm:pi-claude-bridge",
     "git:github.com/earendil-works/pi-review",
-    "git:github.com/earendil-works/pi-review-loop"
+    "git:github.com/earendil-works/pi-review-loop",
+    "git:github.com/DietrichGebert/ponytail"
   ],
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium"

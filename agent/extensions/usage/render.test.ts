@@ -16,6 +16,7 @@ import {
   type CurrentSession,
 } from "./render.ts";
 import { parseCodexUsage, parseGrokBilling } from "./parse.ts";
+import { recentEditedPaths } from "./index.ts";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -36,6 +37,35 @@ const sample: CurrentSession = {
   week: { percent: 41, resetsInSeconds: 259200 },
   cacheRemainingSeconds: null,
 };
+
+test("recentEditedPaths prefers latest unique edits", () => {
+  const ctx = {
+    sessionManager: {
+      getBranch: () => [
+        {
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "toolCall", name: "edit", arguments: { path: "/old" } },
+            ],
+          },
+        },
+        {
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "toolCall", name: "write", arguments: { path: "/new" } },
+              { type: "toolCall", name: "edit", arguments: { path: "/old" } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  assert.deepEqual(recentEditedPaths(ctx as never), ["/old", "/new"]);
+});
 
 test("formatK", () => {
   assert.equal(formatK(0), "0");

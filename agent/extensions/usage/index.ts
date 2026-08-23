@@ -2,7 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { basename } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fetchAll, type ProviderStatus } from "./core.ts";
 import {
   renderBar,
@@ -130,6 +130,31 @@ function lastCacheWriteAtMs(ctx: ExtensionContext | undefined): number | null {
   return null;
 }
 
+export function recentEditedPaths(ctx: ExtensionContext): string[] {
+  const paths: string[] = [];
+  const entries = ctx.sessionManager.getBranch();
+  for (let i = entries.length - 1; i >= 0 && paths.length < 10; i--) {
+    const entry = entries[i];
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const content = entry.message.content;
+    for (let j = content.length - 1; j >= 0 && paths.length < 10; j--) {
+      const item = content[j] as {
+        type?: string;
+        name?: string;
+        arguments?: { path?: unknown };
+      };
+      if (
+        item.type === "toolCall" &&
+        (item.name === "edit" || item.name === "write") &&
+        typeof item.arguments?.path === "string" &&
+        !paths.includes(item.arguments.path)
+      )
+        paths.push(item.arguments.path);
+    }
+  }
+  return paths;
+}
+
 function snapshotCurrent(
   ctx: ExtensionContext | undefined,
   branch: string | null,
@@ -225,6 +250,24 @@ export default function (pi: ExtensionAPI) {
   let requestRender: (() => void) | undefined;
   let ctxRef: ExtensionContext | undefined;
   let worktree = "";
+  let gitBranch: string | null = null;
+  let gitRoot: string | null = null;
+
+  async function updateRepo(directory: string): Promise<boolean> {
+    const result = await pi.exec(
+      "git",
+      ["-C", directory, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD"],
+      { timeout: 2000 },
+    );
+    if (result.code !== 0) return false;
+    const [root, branch] = result.stdout.trim().split("\n");
+    if (!root || !branch) return false;
+    gitRoot = root;
+    gitBranch = branch;
+    worktree = basename(root);
+    requestRender?.();
+    return true;
+  }
 
   async function refresh(): Promise<void> {
     statuses = await fetchAll();
@@ -252,7 +295,7 @@ export default function (pi: ExtensionAPI) {
         render(width: number): string[] {
           const current = snapshotCurrent(
             ctxRef,
-            footerData.getGitBranch(),
+            gitBranch ?? footerData.getGitBranch(),
             statuses,
             worktree,
           );
@@ -274,14 +317,14 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     worktree = basename(ctx.cwd);
-    const root = await pi.exec(
-      "git",
-      ["-C", ctx.cwd, "rev-parse", "--show-toplevel"],
-      { timeout: 2000 },
-    );
-    if (root.code === 0 && root.stdout.trim())
-      worktree = basename(root.stdout.trim());
+    gitBranch = null;
+    gitRoot = null;
     paintFooter(ctx);
+    if (!(await updateRepo(ctx.cwd))) {
+      for (const path of recentEditedPaths(ctx)) {
+        if (await updateRepo(dirname(resolve(ctx.cwd, path)))) break;
+      }
+    }
     await refresh();
   });
 
@@ -296,6 +339,25 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (_event, ctx) => {
     ctxRef = ctx;
     requestRender?.();
+  });
+  pi.on("tool_result", async (event, ctx) => {
+    if (event.isError) return;
+    const path = (event.input as { path?: unknown }).path;
+    if (
+      (event.toolName === "edit" || event.toolName === "write") &&
+      typeof path === "string"
+    ) {
+      await updateRepo(dirname(resolve(ctx.cwd, path)));
+      return;
+    }
+    const command = (event.input as { command?: unknown }).command;
+    if (
+      event.toolName === "bash" &&
+      gitRoot &&
+      typeof command === "string" &&
+      /(?:^|[;&|\s])git(?:\s|$)/.test(command)
+    )
+      await updateRepo(gitRoot);
   });
 
   // Quota moves as turns run; re-fetch before each one. fetchAll's own

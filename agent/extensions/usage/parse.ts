@@ -3,6 +3,9 @@ export type Usage = {
   weeklyPercent: number;
   resetsInSeconds: number | null;
   weeklyResetsInSeconds: number | null;
+  // Codex primary is usually 5h, but some plans only return a weekly
+  // bucket. False hides the footer 5h segment so we don't lie.
+  sessionIsFiveHour?: boolean;
 };
 
 function num(value: unknown): number | null {
@@ -23,27 +26,78 @@ function percent(value: unknown): number | null {
   return value >= 0 && value <= 100 ? value : null;
 }
 
-function obj(value: unknown): Record<string, any> | null {
+function obj(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, any>)
+    ? (value as Record<string, unknown>)
     : null;
 }
 
+type CodexWindow = {
+  percent: number;
+  resets: number | null;
+  duration: number | null;
+};
+
+function readCodexWindow(raw: unknown): CodexWindow | null {
+  const window = obj(raw);
+  if (!window) return null;
+  const used = percent(window.used_percent);
+  if (used === null) return null;
+  return {
+    percent: used,
+    resets: num(window.reset_after_seconds),
+    duration: num(window.limit_window_seconds),
+  };
+}
+
 // chatgpt.com/backend-api/wham/usage:
-// { rate_limit: { primary_window: { used_percent, reset_after_seconds },
-//                  secondary_window: { used_percent } } }
+// { rate_limit: { primary_window: { used_percent, reset_after_seconds,
+//                                   limit_window_seconds },
+//                  secondary_window: { ... } | null } }
+// Do not assume primary=5h: some plans only return a weekly primary.
 export function parseCodexUsage(payload: unknown): Usage | null {
   const rateLimit = obj(obj(payload)?.rate_limit);
   if (!rateLimit) return null;
-  const primary = obj(rateLimit.primary_window);
-  const session = percent(primary?.used_percent);
-  if (session === null) return null;
-  const secondary = obj(rateLimit.secondary_window);
+  const primary = readCodexWindow(rateLimit.primary_window);
+  const secondary = readCodexWindow(rateLimit.secondary_window);
+  const windows = [primary, secondary].filter(
+    (w): w is CodexWindow => w !== null,
+  );
+  if (windows.length === 0) return null;
+
+  const short = windows.find(
+    (w) => w.duration !== null && w.duration <= 6 * 3600,
+  );
+  const long = windows.find(
+    (w) => w.duration !== null && w.duration > 6 * 3600,
+  );
+  if (short && long) {
+    return {
+      sessionPercent: short.percent,
+      weeklyPercent: long.percent,
+      resetsInSeconds: short.resets,
+      weeklyResetsInSeconds: long.resets,
+      sessionIsFiveHour: true,
+    };
+  }
+  const only = short ?? long;
+  if (only) {
+    return {
+      sessionPercent: only.percent,
+      weeklyPercent: only.percent,
+      resetsInSeconds: only.resets,
+      weeklyResetsInSeconds: only.resets,
+      sessionIsFiveHour: Boolean(short),
+    };
+  }
+
+  if (!primary) return null;
   return {
-    sessionPercent: session,
-    weeklyPercent: percent(secondary?.used_percent) ?? session,
-    resetsInSeconds: num(primary?.reset_after_seconds),
-    weeklyResetsInSeconds: num(obj(rateLimit.secondary_window)?.reset_after_seconds),
+    sessionPercent: primary.percent,
+    weeklyPercent: secondary?.percent ?? primary.percent,
+    resetsInSeconds: primary.resets,
+    weeklyResetsInSeconds: secondary?.resets ?? null,
+    sessionIsFiveHour: true,
   };
 }
 
@@ -60,20 +114,27 @@ function secondsUntil(isoDate: string, nowMs: number): number | null {
 // to parseCodexUsage. resets_at is an absolute timestamp rather than a
 // duration, so nowMs is accepted (defaulting live, fixed in tests) to
 // convert it to seconds-until-reset.
-export function parseAnthropicUsage(payload: unknown, nowMs = Date.now()): Usage | null {
+export function parseAnthropicUsage(
+  payload: unknown,
+  nowMs = Date.now(),
+): Usage | null {
   const body = obj(payload);
   if (!body) return null;
   const fiveHour = obj(body.five_hour);
   const session = percent(fiveHour?.utilization);
   if (session === null) return null;
   const sevenDay = obj(body.seven_day);
-  const resetsAt = typeof fiveHour?.resets_at === "string" ? fiveHour.resets_at : null;
-  const weekResetsAt = typeof sevenDay?.resets_at === "string" ? sevenDay.resets_at : null;
+  const resetsAt =
+    typeof fiveHour?.resets_at === "string" ? fiveHour.resets_at : null;
+  const weekResetsAt =
+    typeof sevenDay?.resets_at === "string" ? sevenDay.resets_at : null;
   return {
     sessionPercent: session,
     weeklyPercent: percent(sevenDay?.utilization) ?? session,
     resetsInSeconds: resetsAt ? secondsUntil(resetsAt, nowMs) : null,
-    weeklyResetsInSeconds: weekResetsAt ? secondsUntil(weekResetsAt, nowMs) : null,
+    weeklyResetsInSeconds: weekResetsAt
+      ? secondsUntil(weekResetsAt, nowMs)
+      : null,
   };
 }
 
@@ -110,12 +171,18 @@ export function parseGoogleQuota(payload: unknown): Usage | null {
   const pool = requestBuckets.length ? requestBuckets : buckets;
 
   const modelId = (b: unknown) => String(obj(b)?.modelId ?? "").toLowerCase();
-  const geminiPro = pool.filter((b) => modelId(b).includes("gemini") && modelId(b).includes("pro"));
-  const geminiFlash = pool.filter((b) => modelId(b).includes("gemini") && modelId(b).includes("flash"));
+  const geminiPro = pool.filter(
+    (b) => modelId(b).includes("gemini") && modelId(b).includes("pro"),
+  );
+  const geminiFlash = pool.filter(
+    (b) => modelId(b).includes("gemini") && modelId(b).includes("flash"),
+  );
 
-  const session = mostUsed(geminiPro) ?? mostUsed(geminiFlash) ?? mostUsed(pool);
+  const session =
+    mostUsed(geminiPro) ?? mostUsed(geminiFlash) ?? mostUsed(pool);
   if (session === null) return null;
-  const weekly = mostUsed(geminiFlash) ?? mostUsed(geminiPro) ?? mostUsed(pool) ?? session;
+  const weekly =
+    mostUsed(geminiFlash) ?? mostUsed(geminiPro) ?? mostUsed(pool) ?? session;
 
   return {
     sessionPercent: Math.round(session),
@@ -129,7 +196,10 @@ export function parseGoogleQuota(payload: unknown): Usage | null {
 // { config: { creditUsagePercent, currentPeriod: { type, end } } }
 // SuperGrok is a weekly credit pool — no 5h window. sessionPercent is
 // copied from weekly so the overview bar still has something to draw.
-export function parseGrokBilling(payload: unknown, nowMs = Date.now()): Usage | null {
+export function parseGrokBilling(
+  payload: unknown,
+  nowMs = Date.now(),
+): Usage | null {
   const config = obj(obj(payload)?.config);
   if (!config) return null;
   const weekly = percent(config.creditUsagePercent);

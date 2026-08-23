@@ -11,6 +11,7 @@ web-search-cache/
 pi-acp/
 agent/sessions/
 agent/tmp/
+agent/skills/
 agent/npm/*
 !agent/npm/.gitignore
 !agent/npm/pnpm-workspace.yaml

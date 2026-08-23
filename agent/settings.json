@@ -4,7 +4,11 @@
   "defaultProvider": "xai",
   "defaultModel": "grok-4.6",
   "npmCommand": [
-    "pnpm"
+    "pnpm",
+    "--config.node-linker=hoisted",
+    "--config.strict-dep-builds=false",
+    "--config.auto-install-peers=false",
+    "--config.strict-peer-dependencies=false"
   ],
   "packages": [
     "npm:pi-downshift",

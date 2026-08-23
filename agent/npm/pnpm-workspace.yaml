@@ -1,0 +1,6 @@
+# Explicit build allowlist only — never dangerouslyAllowAllBuilds.
+# Add packages only when their runtime genuinely needs lifecycle scripts.
+allowBuilds:
+  '@ast-grep/cli': true
+  '@google/genai': true
+  protobufjs: true

@@ -11,7 +11,9 @@ web-search-cache/
 pi-acp/
 agent/sessions/
 agent/tmp/
-agent/npm/
+agent/npm/*
+!agent/npm/.gitignore
+!agent/npm/pnpm-workspace.yaml
 agent/git/
 
 # local instrumentation

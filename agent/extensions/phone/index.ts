@@ -50,7 +50,6 @@ type PhoneUi = {
 
 type PhoneCtx = {
     ui: PhoneUi;
-    isIdle: () => boolean;
 };
 
 type PhonePi = {
@@ -190,8 +189,8 @@ export default function (pi: PhonePi) {
                 const inject = (body: string) => {
                     peer = from;
                     lastFromPhone = body;
-                    if (ctx.isIdle()) pi.sendUserMessage(body);
-                    else pi.sendUserMessage(body, { deliverAs: "followUp" });
+                    // same as TUI Enter: new turn if idle, steer if busy
+                    pi.sendUserMessage(body, { deliverAs: "steer" });
                 };
                 const plain = inner.getChildText?.("body")?.trim();
                 const encrypted =

@@ -15,15 +15,37 @@ export function inboundFrom(args: {
     self: string;
 }): string | undefined {
     if (args.receivedCarbon) {
-        if (
-            !args.outerFrom ||
-            bareJid(args.outerFrom) !== bareJid(args.self)
-        ) {
+        if (!args.outerFrom || bareJid(args.outerFrom) !== bareJid(args.self)) {
             return undefined;
         }
         return args.innerFrom;
     }
     return args.innerFrom ?? args.outerFrom;
+}
+
+export type PhoneCommand = "stop" | "phone-off" | "skills";
+
+export function phoneCommand(text: string): PhoneCommand | undefined {
+    const line = text.trim().split(/\r?\n/, 1)[0]?.trim() ?? "";
+    const lower = line.toLowerCase();
+    if (lower === "/stop" || lower.startsWith("/stop ")) return "stop";
+    if (lower === "/phone off") return "phone-off";
+    if (lower === "/skills" || lower.startsWith("/skills ")) return "skills";
+    return undefined;
+}
+
+export function skillLines(
+    commands: { name: string; source?: string }[],
+): string[] {
+    const names = new Set<string>();
+    for (const c of commands) {
+        if (c.source === "skill" || c.name.startsWith("skill:")) {
+            names.add(
+                c.name.startsWith("skill:") ? c.name.slice(6) : c.name,
+            );
+        }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b)).map((n) => `$${n}`);
 }
 
 export function chunkText(text: string, max = 4000): string[] {

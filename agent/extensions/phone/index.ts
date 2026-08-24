@@ -11,6 +11,8 @@ import {
     bareJid,
     chunkText,
     inboundFrom,
+    phoneCommand,
+    skillLines,
     userText,
 } from "./lib.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
@@ -71,6 +73,7 @@ type PhonePi = {
         text: string,
         opts?: { deliverAs: "followUp" | "steer" },
     ) => void;
+    getCommands: () => { name: string; source?: string }[];
 };
 
 export default function (pi: PhonePi) {
@@ -198,7 +201,40 @@ export default function (pi: PhonePi) {
                     self: jid,
                 });
                 if (!from || !allowedFrom(from, allow)) return;
+                const runCommand = async (
+                    cmd: NonNullable<ReturnType<typeof phoneCommand>>,
+                ): Promise<void> => {
+                    peer = from;
+                    if (cmd === "stop") {
+                        if (!ctx.isIdle()) ctx.abort();
+                        await sendChat(from, "stopped");
+                        return;
+                    }
+                    if (cmd === "skills") {
+                        const lines = skillLines(pi.getCommands());
+                        await sendChat(
+                            from,
+                            lines.length ? lines.join("\n") : "no skills",
+                        );
+                        return;
+                    }
+                    await sendChat(from, "phone off");
+                    await stop();
+                    ctx.ui.setStatus("phone", undefined);
+                    ctx.ui.notify("phone off", "info");
+                };
                 const inject = (body: string) => {
+                    const cmd = phoneCommand(body);
+                    if (cmd) {
+                        void runCommand(cmd).catch((err: unknown) => {
+                            const msg =
+                                err instanceof Error
+                                    ? err.message
+                                    : String(err);
+                            ctx.ui.notify(`phone cmd: ${msg}`, "error");
+                        });
+                        return;
+                    }
                     peer = from;
                     lastFromPhone = body;
                     injectTail = injectTail
@@ -229,10 +265,7 @@ export default function (pi: PhonePi) {
                     inner.getChild?.("encrypted");
                 if (!encrypted || !omemo) return;
                 void omemo
-                    .decrypt(
-                        from,
-                        encrypted as Parameters<Omemo["decrypt"]>[1],
-                    )
+                    .decrypt(from, encrypted as Parameters<Omemo["decrypt"]>[1])
                     .then((body) => {
                         if (body?.trim()) inject(body);
                     })

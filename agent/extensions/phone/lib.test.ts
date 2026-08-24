@@ -7,6 +7,8 @@ import {
     bareJid,
     chunkText,
     inboundFrom,
+    phoneCommand,
+    skillLines,
     userText,
 } from "./lib.ts";
 
@@ -58,6 +60,26 @@ test("allowedFrom matches bare JID only", () => {
     assert.equal(
         allowedFrom("other@xmpp.glvortex.net/phone", "tsb@xmpp.glvortex.net"),
         false,
+    );
+});
+
+test("phoneCommand reserved first line", () => {
+    assert.equal(phoneCommand("/stop"), "stop");
+    assert.equal(phoneCommand("/STOP now"), "stop");
+    assert.equal(phoneCommand("/phone off"), "phone-off");
+    assert.equal(phoneCommand("/phone"), undefined);
+    assert.equal(phoneCommand("/skills"), "skills");
+    assert.equal(phoneCommand("stop"), undefined);
+});
+
+test("skillLines lists $names", () => {
+    assert.deepEqual(
+        skillLines([
+            { name: "skill:ponytail", source: "skill" },
+            { name: "phone", source: "command" },
+            { name: "skill:j-save", source: "skill" },
+        ]),
+        ["$j-save", "$ponytail"],
     );
 });
 

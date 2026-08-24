@@ -1,0 +1,11 @@
+#+title: pi config TODO
+#+TODO: TODO INPROGRESS WAITING BLOCKED | DONE CANCELLED
+
+* TODO Make compact-tools title mode more compact  :pi:tui:
+:PROPERTIES:
+:ID:       20260823T235429Z-05d121
+:CREATED:  [2026-08-24 Mon 01:54]
+:END:
+Tool usage still eats too much vertical space in 1-line (title) density. Shrink the call/result rendering so a tool row stays one line — or as close as the TUI allows — instead of header-plus-status stacking.
+
+Scope: compact-tools title mode at minimum. Preview/full can stay.

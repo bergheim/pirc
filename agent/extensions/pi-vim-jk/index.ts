@@ -1,8 +1,9 @@
 /**
  * pi-vim extras: jk → NORMAL, edge j/k browse prompt history.
  *
- * Wraps the editor factory after session_start so we run on top of pi-vim
- * (packages load after ~/.pi/agent/extensions).
+ * Wraps the editor factory on resources_discover (after every session_start,
+ * including async ones). session_start + setTimeout(0) loses to a later
+ * user extension that awaits I/O — usage does, and sorts after pi-vim-jk.
  */
 
 import type {
@@ -97,10 +98,7 @@ function install(ctx: ExtensionContext): boolean {
 }
 
 export default function (pi: ExtensionAPI): void {
-	pi.on("session_start", (_event, ctx) => {
-		// User session_start runs before package ones. Immediate install
-		// wraps nothing (or, on /reload, the old factory that pi-vim then
-		// replaces). `await` flushes microtasks too early — use a macrotask.
-		setTimeout(() => install(ctx), 0);
+	pi.on("resources_discover", (_event, ctx) => {
+		install(ctx);
 	});
 }

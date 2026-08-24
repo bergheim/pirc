@@ -4,7 +4,13 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { client, xml } from "@xmpp/client";
-import { allowedFrom, assistantText, bareJid, chunkText } from "./lib.ts";
+import {
+    allowedFrom,
+    assistantText,
+    bareJid,
+    chunkText,
+    userText,
+} from "./lib.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
 
 // @xmpp/client 0.13 picks SCRAM-SHA-1 first; this ejabberd rejects the response.
@@ -69,6 +75,7 @@ export default function (pi: PhonePi) {
     let omemo: Omemo | undefined;
     let peer: string | undefined;
     let allow = DEFAULT_ALLOW;
+    let lastFromPhone: string | undefined;
 
     async function sendChat(to: string, body: string): Promise<void> {
         if (!xmpp || !omemo || !body) return;
@@ -157,7 +164,9 @@ export default function (pi: PhonePi) {
                 if (type === "groupchat" || type === "error") return;
                 const from = stanza.attrs.from;
                 if (!from || !allowedFrom(from, allow)) return;
-                const encrypted = stanza.getChild("encrypted", NS);
+                const encrypted =
+                    stanza.getChild("encrypted", NS) ??
+                    stanza.getChild("encrypted");
                 if (!encrypted || !omemo) {
                     if (stanza.getChildText("body")?.trim()) {
                         ctx.ui.notify("phone: ignored plaintext", "warning");
@@ -167,8 +176,15 @@ export default function (pi: PhonePi) {
                 void omemo
                     .decrypt(from, encrypted)
                     .then((body) => {
-                        if (!body?.trim()) return;
+                        if (!body?.trim()) {
+                            ctx.ui.notify(
+                                "phone: encrypted but no key for us",
+                                "warning",
+                            );
+                            return;
+                        }
                         peer = from;
+                        lastFromPhone = body;
                         if (ctx.isIdle()) pi.sendUserMessage(body);
                         else
                             pi.sendUserMessage(body, { deliverAs: "followUp" });
@@ -183,6 +199,7 @@ export default function (pi: PhonePi) {
 
         try {
             await conn.start();
+            await conn.send(xml("presence"));
             omemo = await Omemo.create(
                 conn,
                 process.env.PI_OMEMO_STORE ??
@@ -229,13 +246,26 @@ export default function (pi: PhonePi) {
             event as { message?: { role?: string; content?: unknown } }
         ).message;
         if (!message) return;
+        const incoming = userText(message);
+        if (incoming) {
+            if (incoming === lastFromPhone) {
+                lastFromPhone = undefined;
+                return;
+            }
+            try {
+                await sendChat(peer, incoming);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`phone send: ${msg}`);
+            }
+            return;
+        }
         const text = assistantText(message);
         if (!text) return;
         try {
             await sendChat(peer, text);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            // notify is unavailable here; drop is worse than a throw to logs
             console.error(`phone send: ${msg}`);
         }
     });

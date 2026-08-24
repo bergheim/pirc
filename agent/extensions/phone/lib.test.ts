@@ -1,7 +1,13 @@
 /// <reference types="node" />
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allowedFrom, assistantText, bareJid, chunkText } from "./lib.ts";
+import {
+    allowedFrom,
+    assistantText,
+    bareJid,
+    chunkText,
+    userText,
+} from "./lib.ts";
 
 test("bareJid strips resource and lowercases", () => {
     assert.equal(
@@ -40,4 +46,9 @@ test("assistantText joins text parts and ignores tools", () => {
         "hi there",
     );
     assert.equal(assistantText({ role: "user", content: "nope" }), "");
+});
+
+test("userText reads user content", () => {
+    assert.equal(userText({ role: "user", content: "from tui" }), "from tui");
+    assert.equal(userText({ role: "assistant", content: "nope" }), "");
 });

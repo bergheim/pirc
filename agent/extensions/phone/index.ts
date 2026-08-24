@@ -8,20 +8,27 @@ import { allowedFrom, assistantText, bareJid, chunkText } from "./lib.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
 
 // @xmpp/client 0.13 picks SCRAM-SHA-1 first; this ejabberd rejects the response.
-preferPlainSasl();
-
 function preferPlainSasl(): void {
     const req = createRequire(import.meta.url);
     const fromClient = createRequire(req.resolve("@xmpp/client"));
-    const Factory = fromClient("saslmechanisms") as {
-        prototype: { create: (mechs: string[]) => unknown };
+    const fromSasl = createRequire(fromClient.resolve("@xmpp/sasl"));
+    const FactoryMod = fromSasl("saslmechanisms") as {
+        Factory?: { prototype: { use: (...args: unknown[]) => unknown } };
+        prototype: { use: (...args: unknown[]) => unknown };
     };
-    const orig = Factory.prototype.create;
-    Factory.prototype.create = function (mechs: string[]) {
-        if (mechs.includes("PLAIN")) return orig.call(this, ["PLAIN"]);
-        return orig.call(this, mechs);
+    const Factory = FactoryMod.Factory ?? FactoryMod;
+    const orig = Factory.prototype.use;
+    Factory.prototype.use = function (name: unknown, mech?: unknown) {
+        const label =
+            typeof name === "string"
+                ? name
+                : ((name as { prototype?: { name?: string } })?.prototype
+                      ?.name ?? "");
+        if (label === "SCRAM-SHA-1") return this;
+        return orig.call(this, name, mech);
     };
 }
+preferPlainSasl();
 
 const DEFAULT_JID = "pi@xmpp.glvortex.net";
 const DEFAULT_ALLOW = "tsb@xmpp.glvortex.net";
@@ -110,8 +117,7 @@ export default function (pi: PhonePi) {
         }
         const username = jid.slice(0, at);
         const domain = jid.slice(at + 1);
-        const service =
-            process.env.PI_XMPP_SERVICE ?? `xmpp://${domain}:5222`;
+        const service = process.env.PI_XMPP_SERVICE ?? `xmpp://${domain}:5222`;
 
         const conn = client({
             service,

@@ -6,7 +6,9 @@ import {
     assistantText,
     bareJid,
     chunkText,
+    CHATSTATES,
     inboundFrom,
+    chatState,
     phoneCommand,
     skillLines,
     userText,
@@ -80,6 +82,18 @@ test("skillLines lists $names", () => {
             { name: "skill:j-save", source: "skill" },
         ]),
         ["$j-save", "$ponytail"],
+    );
+});
+
+test("chatState reads XEP-0085", () => {
+    const kids = new Set([`composing:${CHATSTATES}`]);
+    assert.equal(
+        chatState((name, ns) => (kids.has(`${name}:${ns}`) ? {} : undefined)),
+        "composing",
+    );
+    assert.equal(
+        chatState(() => undefined),
+        undefined,
     );
 });
 

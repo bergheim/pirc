@@ -9,11 +9,14 @@ import {
     allowedFrom,
     assistantText,
     bareJid,
+    CHATSTATES,
+    chatState,
     chunkText,
     inboundFrom,
     phoneCommand,
     skillLines,
     userText,
+    type ChatState,
 } from "./lib.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
 
@@ -83,6 +86,22 @@ export default function (pi: PhonePi) {
     let allow = DEFAULT_ALLOW;
     let lastFromPhone: string | undefined;
     let injectTail: Promise<void> = Promise.resolve();
+
+    async function sendState(
+        to: string | undefined,
+        name: ChatState,
+    ): Promise<void> {
+        if (!xmpp || !to) return;
+        await xmpp.send(
+            xml(
+                "message",
+                { type: "chat", to: bareJid(to) },
+                xml(name, { xmlns: CHATSTATES }),
+                xml("no-store", { xmlns: "urn:xmpp:hints" }),
+                xml("no-permanent-store", { xmlns: "urn:xmpp:hints" }),
+            ),
+        );
+    }
 
     async function sendChat(to: string, body: string): Promise<void> {
         if (!xmpp || !omemo || !body) return;
@@ -178,6 +197,38 @@ export default function (pi: PhonePi) {
                 if (!stanza.is("message")) return;
                 const type = stanza.attrs.type;
                 if (type === "groupchat" || type === "error") return;
+                const carbonEarly = stanza.getChild(
+                    "received",
+                    "urn:xmpp:carbons:2",
+                );
+                const innerEarly =
+                    carbonEarly
+                        ?.getChild("forwarded", "urn:xmpp:forward:0")
+                        ?.getChild("message") ?? stanza;
+                const state = chatState((name, ns) =>
+                    innerEarly.getChild?.(name, ns),
+                );
+                const hasBody = Boolean(innerEarly.getChildText?.("body")?.trim());
+                const hasEnc = Boolean(
+                    innerEarly.getChild?.("encrypted", NS) ??
+                        innerEarly.getChild?.("encrypted"),
+                );
+                if (state && !hasBody && !hasEnc) {
+                    const who = inboundFrom({
+                        outerFrom: stanza.attrs.from,
+                        innerFrom:
+                            innerEarly.attrs?.from ?? stanza.attrs.from,
+                        receivedCarbon: Boolean(carbonEarly),
+                        self: jid,
+                    });
+                    if (who && allowedFrom(who, allow)) {
+                        ctx.ui.setStatus(
+                            "phone",
+                            state === "composing" ? "typing" : "phone",
+                        );
+                    }
+                    return;
+                }
                 try {
                     appendFileSync(
                         join(homedir(), ".pi", "agent", "phone-in.log"),
@@ -282,10 +333,7 @@ export default function (pi: PhonePi) {
                                     err instanceof Error
                                         ? err.message
                                         : String(err);
-                                ctx.ui.notify(
-                                    `phone decrypt: ${msg}`,
-                                    "error",
-                                );
+                                ctx.ui.notify(`phone decrypt: ${msg}`, "error");
                             }
                         });
                     return;
@@ -332,6 +380,13 @@ export default function (pi: PhonePi) {
             ctx.ui.notify(`phone send: ${msg}`, "error");
         }
     }
+
+    pi.on("agent_start", () => {
+        void sendState(peer, "composing").catch(() => undefined);
+    });
+    pi.on("agent_settled", () => {
+        void sendState(peer, "active").catch(() => undefined);
+    });
 
     pi.registerCommand("phone", {
         description: "Relay this session over OMEMO XMPP",

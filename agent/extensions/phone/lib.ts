@@ -40,12 +40,22 @@ export function skillLines(
     const names = new Set<string>();
     for (const c of commands) {
         if (c.source === "skill" || c.name.startsWith("skill:")) {
-            names.add(
-                c.name.startsWith("skill:") ? c.name.slice(6) : c.name,
-            );
+            names.add(c.name.startsWith("skill:") ? c.name.slice(6) : c.name);
         }
     }
     return [...names].sort((a, b) => a.localeCompare(b)).map((n) => `$${n}`);
+}
+
+export const CHATSTATES = "http://jabber.org/protocol/chatstates";
+
+export type ChatState = "composing" | "paused" | "active";
+
+export function chatState(
+    getChild: (name: string, ns?: string) => unknown,
+): ChatState | undefined {
+    for (const name of ["composing", "paused", "active"] as const) {
+        if (getChild(name, CHATSTATES)) return name;
+    }
 }
 
 export function chunkText(text: string, max = 4000): string[] {

@@ -2,7 +2,8 @@
  * compact-tools — three-level tool density
  *
  * Modes (cycle with ctrl+b):
- *   title   — built-in header only (command/path)
+ *   title   — header only, self-shell (no Box pad). Still one row per call —
+ *             pi always inserts a blank line; cannot stack calls onto one line.
  *   preview — header + stock-ish collapsed preview (~5–10 lines)
  *   full    — header + entire tool output
  *
@@ -263,6 +264,9 @@ export default function (pi: ExtensionAPI) {
 	// --- bash ---
 	pi.registerTool({
 		name: "bash",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "bash",
 		description: "Execute a bash command in the current working directory.",
 		parameters: createBashTool(process.cwd()).parameters,
@@ -327,6 +331,9 @@ export default function (pi: ExtensionAPI) {
 	// --- read ---
 	pi.registerTool({
 		name: "read",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "read",
 		description: "Read a file.",
 		parameters: createReadTool(process.cwd()).parameters,
@@ -393,6 +400,9 @@ export default function (pi: ExtensionAPI) {
 	// --- grep ---
 	pi.registerTool({
 		name: "grep",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "grep",
 		description: "Search file contents for patterns.",
 		parameters: createGrepTool(process.cwd()).parameters,
@@ -460,6 +470,9 @@ export default function (pi: ExtensionAPI) {
 	// --- find ---
 	pi.registerTool({
 		name: "find",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "find",
 		description: "Find files by glob pattern.",
 		parameters: createFindTool(process.cwd()).parameters,
@@ -522,6 +535,9 @@ export default function (pi: ExtensionAPI) {
 	// --- ls ---
 	pi.registerTool({
 		name: "ls",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "ls",
 		description: "List directory contents.",
 		parameters: createLsTool(process.cwd()).parameters,
@@ -580,6 +596,9 @@ export default function (pi: ExtensionAPI) {
 	// --- edit ---
 	pi.registerTool({
 		name: "edit",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "edit",
 		description: "Edit a file.",
 		parameters: createEditTool(process.cwd()).parameters,
@@ -663,6 +682,9 @@ export default function (pi: ExtensionAPI) {
 	// --- write ---
 	pi.registerTool({
 		name: "write",
+		get renderShell() {
+			return density === "title" ? "self" : "default";
+		},
 		label: "write",
 		description: "Write a file.",
 		parameters: createWriteTool(process.cwd()).parameters,

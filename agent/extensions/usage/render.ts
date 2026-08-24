@@ -3,7 +3,7 @@ export type Theme = {
   bold(text: string): string;
 };
 
-// barColor speaks red/yellow/green; the theme only knows semantic slots.
+// barColor is silent below 70%; the theme only knows semantic slots.
 export const TONE = {
   red: "error",
   yellow: "warning",
@@ -18,6 +18,7 @@ export type CurrentSession = {
   branch: string | null;
   dirty: boolean;
   percent: number | null;
+  tokens: number | null;
   contextWindow: number;
   cost: number;
   cacheRemainingSeconds: number | null;
@@ -32,10 +33,26 @@ export function renderBar(usedPercent: number, width = 10): string {
   return "█".repeat(filled) + "░".repeat(width - filled);
 }
 
-export function barColor(usedPercent: number): "green" | "yellow" | "red" {
+export function barColor(usedPercent: number): "yellow" | "red" | null {
   if (usedPercent >= 90) return "red";
   if (usedPercent >= 70) return "yellow";
-  return "green";
+  return null;
+}
+
+export const CONTEXT_YELLOW = 200_000;
+export const CONTEXT_RED = 500_000;
+export const CONTEXT_BUDGET = 500_000;
+
+export function contextColor(tokens: number): "yellow" | "red" | null {
+  if (tokens >= CONTEXT_RED) return "red";
+  if (tokens >= CONTEXT_YELLOW) return "yellow";
+  return null;
+}
+
+export function contextTone(tokens: number | null): string | null {
+  if (tokens === null) return "dim";
+  const c = contextColor(tokens);
+  return c ? TONE[c] : null;
 }
 
 export function formatDuration(seconds: number): string {
@@ -159,10 +176,11 @@ export function currentLineSegments(session: CurrentSession): Segment[] {
       tone: null,
       keep: 80,
     });
+  const usedLabel = session.tokens === null ? "?" : formatK(session.tokens);
   segs.push({
     key: "context",
-    plain: `󰍛 ctx ${percentLabel}%/${formatK(session.contextWindow)}`,
-    tone: session.percent === null ? "dim" : TONE[barColor(session.percent)],
+    plain: `󰍛 ctx ${percentLabel}% ${usedLabel}/${formatK(CONTEXT_BUDGET)}`,
+    tone: contextTone(session.tokens),
     keep: 90,
   });
   if (session.cacheRemainingSeconds !== null) {

@@ -65,7 +65,8 @@ function footerLine(theme: Theme, status: ProviderStatus): string {
   const percent = weeklyOnly(status)
     ? status.usage.weeklyPercent
     : status.usage.sessionPercent;
-  return theme.fg(TONE[barColor(percent)], segment);
+  const color = barColor(percent);
+  return color ? theme.fg(TONE[color], segment) : segment;
 }
 
 function sessionCost(ctx: ExtensionContext | undefined): number {
@@ -99,7 +100,8 @@ export function recentEditedPaths(ctx: ExtensionContext): string[] {
   const entries = ctx.sessionManager.getBranch();
   for (let i = entries.length - 1; i >= 0 && paths.length < 10; i--) {
     const entry = entries[i];
-    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    if (entry.type !== "message" || entry.message.role !== "assistant")
+      continue;
     const content = entry.message.content;
     for (let j = content.length - 1; j >= 0 && paths.length < 10; j--) {
       const item = content[j] as {
@@ -139,6 +141,7 @@ function snapshotCurrent(
     branch,
     dirty,
     percent: usage?.percent ?? null,
+    tokens: usage?.tokens ?? null,
     contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
     cost: sessionCost(ctx),
     cacheRemainingSeconds: cacheRemainingSeconds(
@@ -265,12 +268,10 @@ export default function (pi: ExtensionAPI) {
             worktree,
             gitDirty,
           );
-          if (current.cacheRemainingSeconds !== null) {
-            if (tick === undefined)
-              tick = setInterval(() => tui.requestRender(), 1000);
-          } else {
+          if (current.cacheRemainingSeconds === null) {
             stopTick();
-          }
+          } else if (tick === undefined)
+            tick = setInterval(() => tui.requestRender(), 1000);
           return [
             "",
             renderCurrentLine(theme, current, width),

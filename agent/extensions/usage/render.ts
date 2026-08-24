@@ -7,7 +7,6 @@ export type Theme = {
 export const TONE = {
   red: "error",
   yellow: "warning",
-  green: "success",
 } as const;
 
 export type CurrentSession = {
@@ -19,7 +18,6 @@ export type CurrentSession = {
   dirty: boolean;
   percent: number | null;
   tokens: number | null;
-  contextWindow: number;
   cost: number;
   cacheRemainingSeconds: number | null;
 };
@@ -40,19 +38,13 @@ export function barColor(usedPercent: number): "yellow" | "red" | null {
 }
 
 export const CONTEXT_YELLOW = 200_000;
-export const CONTEXT_RED = 500_000;
-export const CONTEXT_BUDGET = 500_000;
-
-export function contextColor(tokens: number): "yellow" | "red" | null {
-  if (tokens >= CONTEXT_RED) return "red";
-  if (tokens >= CONTEXT_YELLOW) return "yellow";
-  return null;
-}
+export const CONTEXT_BUDGET = 500_000; // also the red cliff
 
 export function contextTone(tokens: number | null): string | null {
   if (tokens === null) return "dim";
-  const c = contextColor(tokens);
-  return c ? TONE[c] : null;
+  if (tokens >= CONTEXT_BUDGET) return TONE.red;
+  if (tokens >= CONTEXT_YELLOW) return TONE.yellow;
+  return null;
 }
 
 export function formatDuration(seconds: number): string {

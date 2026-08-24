@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   barColor,
-  contextColor,
   contextTone,
   cacheRemainingSeconds,
   cells,
@@ -35,7 +34,6 @@ const sample: CurrentSession = {
   dirty: true,
   percent: 42,
   tokens: 120000,
-  contextWindow: 200000,
   cost: 1.23,
   cacheRemainingSeconds: null,
 };
@@ -85,14 +83,11 @@ test("barColor is quiet until 70/90", () => {
   assert.equal(barColor(90), "red");
 });
 
-test("contextColor is yellow at 200k, red at 500k", () => {
-  assert.equal(contextColor(111_000), null);
-  assert.equal(contextColor(199_999), null);
-  assert.equal(contextColor(200_000), "yellow");
-  assert.equal(contextColor(499_999), "yellow");
-  assert.equal(contextColor(500_000), "red");
+test("contextTone is yellow at 200k, red at 500k", () => {
   assert.equal(contextTone(111_000), null);
+  assert.equal(contextTone(199_999), null);
   assert.equal(contextTone(200_000), TONE.yellow);
+  assert.equal(contextTone(499_999), TONE.yellow);
   assert.equal(contextTone(500_000), TONE.red);
   assert.equal(contextTone(null), "dim");
 });

@@ -142,7 +142,6 @@ function snapshotCurrent(
     dirty,
     percent: usage?.percent ?? null,
     tokens: usage?.tokens ?? null,
-    contextWindow: usage?.contextWindow ?? model?.contextWindow ?? 0,
     cost: sessionCost(ctx),
     cacheRemainingSeconds: cacheRemainingSeconds(
       lastCacheWriteAtMs(ctx),

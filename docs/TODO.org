@@ -22,3 +22,15 @@ CLOSED: [2026-08-24 Mon 12:45]
   Extension at agent/extensions/phone. Host still registers pi@.
 :END:
 Relay this TUI session to tsb@xmpp.glvortex.net via pi@. /phone on, /phone off. Creds from env, password prompt if unset.
+
+* DONE XMPP /phone OMEMO                                      :pi:xmpp:omemo:
+CLOSED: [2026-08-24 Mon 13:35]
+:PROPERTIES:
+:ID:       20260824T112100Z-529693
+:CREATED:  [2026-08-24 Mon 13:21]
+:END:
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-08-24 Mon 13:35] \\
+  libomemo.js + PEP. Identity in ~/.pi/agent/phone-omemo.json. No plaintext send.
+:END:
+Conversations-compatible eu.siacs.conversations.axolotl. Persist identity. Refuse plaintext send. Spike libomemo.js before wiring.

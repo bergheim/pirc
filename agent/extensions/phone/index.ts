@@ -1,12 +1,15 @@
 /// <reference types="node" />
 /// <reference path="./xmpp.d.ts" />
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { client, xml } from "@xmpp/client";
 import { allowedFrom, assistantText, bareJid, chunkText } from "./lib.ts";
+import { NS, Omemo, type XmppIq } from "./omemo.ts";
 
 const DEFAULT_JID = "pi@xmpp.glvortex.net";
 const DEFAULT_ALLOW = "tsb@xmpp.glvortex.net";
 
-type XmppClient = ReturnType<typeof client>;
+type XmppClient = ReturnType<typeof client> & XmppIq;
 
 type PhoneUi = {
     notify: (msg: string, level: "info" | "warning" | "error") => void;
@@ -39,14 +42,21 @@ type PhonePi = {
 
 export default function (pi: PhonePi) {
     let xmpp: XmppClient | undefined;
+    let omemo: Omemo | undefined;
     let peer: string | undefined;
     let allow = DEFAULT_ALLOW;
 
     async function sendChat(to: string, body: string): Promise<void> {
-        if (!xmpp || !body) return;
+        if (!xmpp || !omemo || !body) return;
         for (const part of chunkText(body)) {
+            const encrypted = await omemo.encrypt(part);
             await xmpp.send(
-                xml("message", { type: "chat", to }, xml("body", {}, part)),
+                xml(
+                    "message",
+                    { type: "chat", to: bareJid(to) },
+                    encrypted,
+                    xml("store", { xmlns: "urn:xmpp:hints" }),
+                ),
             );
         }
     }
@@ -54,6 +64,7 @@ export default function (pi: PhonePi) {
     async function stop(): Promise<void> {
         const conn = xmpp;
         xmpp = undefined;
+        omemo = undefined;
         peer = undefined;
         if (!conn) return;
         await conn.stop().catch(() => undefined);
@@ -90,7 +101,7 @@ export default function (pi: PhonePi) {
             username,
             password,
             resource: `phone-${process.pid}`,
-        });
+        }) as XmppClient;
 
         conn.on("error", (err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
@@ -100,6 +111,7 @@ export default function (pi: PhonePi) {
         conn.on("offline", () => {
             if (xmpp === conn) {
                 xmpp = undefined;
+                omemo = undefined;
                 peer = undefined;
                 ctx.ui.setStatus("phone", undefined);
             }
@@ -110,6 +122,10 @@ export default function (pi: PhonePi) {
             (stanza: {
                 is: (name: string) => boolean;
                 attrs: { type?: string; from?: string };
+                getChild: (
+                    name: string,
+                    ns?: string,
+                ) => Parameters<Omemo["decrypt"]>[1] | undefined;
                 getChildText: (name: string) => string | undefined;
             }) => {
                 if (!stanza.is("message")) return;
@@ -117,31 +133,59 @@ export default function (pi: PhonePi) {
                 if (type === "groupchat" || type === "error") return;
                 const from = stanza.attrs.from;
                 if (!from || !allowedFrom(from, allow)) return;
-                const body = stanza.getChildText("body")?.trim();
-                if (!body) return;
-                peer = from;
-                if (ctx.isIdle()) pi.sendUserMessage(body);
-                else pi.sendUserMessage(body, { deliverAs: "followUp" });
+                const encrypted = stanza.getChild("encrypted", NS);
+                if (!encrypted || !omemo) {
+                    if (stanza.getChildText("body")?.trim()) {
+                        ctx.ui.notify("phone: ignored plaintext", "warning");
+                    }
+                    return;
+                }
+                void omemo
+                    .decrypt(from, encrypted)
+                    .then((body) => {
+                        if (!body?.trim()) return;
+                        peer = from;
+                        if (ctx.isIdle()) pi.sendUserMessage(body);
+                        else pi.sendUserMessage(body, { deliverAs: "followUp" });
+                    })
+                    .catch((err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        ctx.ui.notify(`phone decrypt: ${msg}`, "error");
+                    });
             },
         );
 
         try {
             await conn.start();
+            omemo = await Omemo.create(
+                conn,
+                process.env.PI_OMEMO_STORE ??
+                    join(homedir(), ".pi", "agent", "phone-omemo.json"),
+                jid,
+                allow,
+            );
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             ctx.ui.notify(`phone failed: ${msg}`, "error");
+            await conn.stop().catch(() => undefined);
+            omemo = undefined;
             return;
         }
 
         xmpp = conn;
         peer = allow;
         ctx.ui.setStatus("phone", "phone");
-        ctx.ui.notify(`phone → ${bareJid(allow)}`, "info");
-        await sendChat(allow, "phone on — this pi session");
+        ctx.ui.notify(`phone → ${bareJid(allow)} (omemo)`, "info");
+        try {
+            await sendChat(allow, "phone on — this pi session");
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            ctx.ui.notify(`phone send: ${msg}`, "error");
+        }
     }
 
     pi.registerCommand("phone", {
-        description: "Relay this session over XMPP",
+        description: "Relay this session over OMEMO XMPP",
         handler: async (args, ctx) => {
             if (args.trim().toLowerCase() === "off") {
                 await stop();
@@ -154,14 +198,20 @@ export default function (pi: PhonePi) {
     });
 
     pi.on("message_end", async (event) => {
-        if (!xmpp || !peer) return;
+        if (!xmpp || !omemo || !peer) return;
         const message = (
             event as { message?: { role?: string; content?: unknown } }
         ).message;
         if (!message) return;
         const text = assistantText(message);
         if (!text) return;
-        await sendChat(peer, text);
+        try {
+            await sendChat(peer, text);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // notify is unavailable here; drop is worse than a throw to logs
+            console.error(`phone send: ${msg}`);
+        }
     });
 
     pi.on("session_shutdown", async () => {

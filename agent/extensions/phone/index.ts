@@ -208,7 +208,9 @@ export default function (pi: PhonePi) {
                 const state = chatState((name, ns) =>
                     innerEarly.getChild?.(name, ns),
                 );
-                const hasBody = Boolean(innerEarly.getChildText?.("body")?.trim());
+                const hasBody = Boolean(
+                    innerEarly.getChildText?.("body")?.trim(),
+                );
                 const hasEnc = Boolean(
                     innerEarly.getChild?.("encrypted", NS) ??
                         innerEarly.getChild?.("encrypted"),
@@ -216,8 +218,7 @@ export default function (pi: PhonePi) {
                 if (state && !hasBody && !hasEnc) {
                     const who = inboundFrom({
                         outerFrom: stanza.attrs.from,
-                        innerFrom:
-                            innerEarly.attrs?.from ?? stanza.attrs.from,
+                        innerFrom: innerEarly.attrs?.from ?? stanza.attrs.from,
                         receivedCarbon: Boolean(carbonEarly),
                         self: jid,
                     });
@@ -301,6 +302,7 @@ export default function (pi: PhonePi) {
                                     await new Promise((r) => setTimeout(r, 50));
                                 }
                             }
+                            await sendState(from, "composing");
                             pi.sendUserMessage(body);
                         })
                         .catch((err: unknown) => {
@@ -383,6 +385,12 @@ export default function (pi: PhonePi) {
 
     pi.on("agent_start", () => {
         void sendState(peer, "composing").catch(() => undefined);
+    });
+    pi.on("message_start", (event) => {
+        const role = (event as { message?: { role?: string } }).message
+            ?.role;
+        if (role === "assistant")
+            void sendState(peer, "composing").catch(() => undefined);
     });
     pi.on("agent_settled", () => {
         void sendState(peer, "active").catch(() => undefined);

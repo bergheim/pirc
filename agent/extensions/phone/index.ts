@@ -1,5 +1,6 @@
 /// <reference types="node" />
 /// <reference path="./xmpp.d.ts" />
+import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -45,6 +46,20 @@ preferPlainSasl();
 
 const DEFAULT_JID = "pi@xmpp.glvortex.net";
 const DEFAULT_ALLOW = "tsb@xmpp.glvortex.net";
+
+function xmppPassword(jid: string): string | undefined {
+    const env = process.env.PI_XMPP_PASSWORD;
+    if (env) return env;
+    try {
+        const out = execFileSync("pass", ["show", `xmpp/${jid}`], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+        });
+        return out.split("\n")[0] || undefined;
+    } catch {
+        return undefined;
+    }
+}
 
 type XmppClient = ReturnType<typeof client> & XmppIq;
 
@@ -136,7 +151,7 @@ export default function (pi: PhonePi) {
         const jid = process.env.PI_XMPP_JID ?? DEFAULT_JID;
         allow = process.env.PI_XMPP_ALLOW ?? DEFAULT_ALLOW;
         const password =
-            process.env.PI_XMPP_PASSWORD ??
+            xmppPassword(jid) ??
             (await ctx.ui.input("XMPP password for pi@", ""));
         if (!password) {
             ctx.ui.notify("PI_XMPP_PASSWORD unset", "error");
@@ -230,14 +245,6 @@ export default function (pi: PhonePi) {
                     }
                     return;
                 }
-                try {
-                    appendFileSync(
-                        join(homedir(), ".pi", "agent", "phone-in.log"),
-                        `${new Date().toISOString()} ${stanza.toString?.() ?? ""}\n`,
-                    );
-                } catch {
-                    /* ignore */
-                }
                 const carbon = stanza.getChild(
                     "received",
                     "urn:xmpp:carbons:2",
@@ -253,6 +260,14 @@ export default function (pi: PhonePi) {
                     self: jid,
                 });
                 if (!from || !allowedFrom(from, allow)) return;
+                try {
+                    appendFileSync(
+                        join(homedir(), ".pi", "agent", "phone-in.log"),
+                        `${new Date().toISOString()} ${stanza.toString?.() ?? ""}\n`,
+                    );
+                } catch {
+                    /* ignore */
+                }
                 const runCommand = async (
                     cmd: NonNullable<ReturnType<typeof phoneCommand>>,
                 ): Promise<void> => {
@@ -387,8 +402,7 @@ export default function (pi: PhonePi) {
         void sendState(peer, "composing").catch(() => undefined);
     });
     pi.on("message_start", (event) => {
-        const role = (event as { message?: { role?: string } }).message
-            ?.role;
+        const role = (event as { message?: { role?: string } }).message?.role;
         if (role === "assistant")
             void sendState(peer, "composing").catch(() => undefined);
     });

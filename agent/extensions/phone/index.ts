@@ -50,6 +50,8 @@ type PhoneUi = {
 
 type PhoneCtx = {
     ui: PhoneUi;
+    isIdle: () => boolean;
+    abort: () => void;
 };
 
 type PhonePi = {
@@ -76,6 +78,7 @@ export default function (pi: PhonePi) {
     let peer: string | undefined;
     let allow = DEFAULT_ALLOW;
     let lastFromPhone: string | undefined;
+    let injectTail: Promise<void> = Promise.resolve();
 
     async function sendChat(to: string, body: string): Promise<void> {
         if (!xmpp || !omemo || !body) return;
@@ -189,8 +192,30 @@ export default function (pi: PhonePi) {
                 const inject = (body: string) => {
                     peer = from;
                     lastFromPhone = body;
-                    // same as TUI Enter: new turn if idle, steer if busy
-                    pi.sendUserMessage(body, { deliverAs: "steer" });
+                    injectTail = injectTail
+                        .then(async () => {
+                            if (!ctx.isIdle()) {
+                                ctx.abort();
+                                const t0 = Date.now();
+                                // ponytail: poll; session.abort() is not awaitable from ctx
+                                while (
+                                    !ctx.isIdle() &&
+                                    Date.now() - t0 < 15_000
+                                ) {
+                                    await new Promise((r) =>
+                                        setTimeout(r, 50),
+                                    );
+                                }
+                            }
+                            pi.sendUserMessage(body);
+                        })
+                        .catch((err: unknown) => {
+                            const msg =
+                                err instanceof Error
+                                    ? err.message
+                                    : String(err);
+                            ctx.ui.notify(`phone inject: ${msg}`, "error");
+                        });
                 };
                 const plain = inner.getChildText?.("body")?.trim();
                 const encrypted =

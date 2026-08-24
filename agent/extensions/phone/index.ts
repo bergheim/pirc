@@ -187,36 +187,39 @@ export default function (pi: PhonePi) {
                         ?.getChild("message") ?? stanza;
                 const from = inner.attrs?.from ?? stanza.attrs.from;
                 if (!from || !allowedFrom(from, allow)) return;
+                const inject = (body: string) => {
+                    peer = from;
+                    lastFromPhone = body;
+                    if (ctx.isIdle()) pi.sendUserMessage(body);
+                    else pi.sendUserMessage(body, { deliverAs: "followUp" });
+                };
+                const plain = inner.getChildText?.("body")?.trim();
                 const encrypted =
                     inner.getChild?.("encrypted", NS) ??
                     inner.getChild?.("encrypted");
-                if (!encrypted || !omemo) {
-                    if (inner.getChildText?.("body")?.trim()) {
-                        ctx.ui.notify("phone: ignored plaintext", "warning");
-                    }
+                if (encrypted && omemo) {
+                    void omemo
+                        .decrypt(
+                            from,
+                            encrypted as Parameters<Omemo["decrypt"]>[1],
+                        )
+                        .then((body) => {
+                            if (body?.trim()) inject(body);
+                            else if (plain) inject(plain);
+                        })
+                        .catch((err: unknown) => {
+                            if (plain) inject(plain);
+                            else {
+                                const msg =
+                                    err instanceof Error
+                                        ? err.message
+                                        : String(err);
+                                ctx.ui.notify(`phone decrypt: ${msg}`, "error");
+                            }
+                        });
                     return;
                 }
-                void omemo
-                    .decrypt(from, encrypted as Parameters<Omemo["decrypt"]>[1])
-                    .then((body) => {
-                        if (!body?.trim()) {
-                            ctx.ui.notify(
-                                "phone: encrypted but no key for us",
-                                "warning",
-                            );
-                            return;
-                        }
-                        peer = from;
-                        lastFromPhone = body;
-                        if (ctx.isIdle()) pi.sendUserMessage(body);
-                        else
-                            pi.sendUserMessage(body, { deliverAs: "followUp" });
-                    })
-                    .catch((err: unknown) => {
-                        const msg =
-                            err instanceof Error ? err.message : String(err);
-                        ctx.ui.notify(`phone decrypt: ${msg}`, "error");
-                    });
+                if (plain) inject(plain);
             },
         );
 

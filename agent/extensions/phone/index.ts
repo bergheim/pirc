@@ -1,10 +1,27 @@
 /// <reference types="node" />
 /// <reference path="./xmpp.d.ts" />
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { client, xml } from "@xmpp/client";
 import { allowedFrom, assistantText, bareJid, chunkText } from "./lib.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
+
+// @xmpp/client 0.13 picks SCRAM-SHA-1 first; this ejabberd rejects the response.
+preferPlainSasl();
+
+function preferPlainSasl(): void {
+    const req = createRequire(import.meta.url);
+    const fromClient = createRequire(req.resolve("@xmpp/client"));
+    const Factory = fromClient("saslmechanisms") as {
+        prototype: { create: (mechs: string[]) => unknown };
+    };
+    const orig = Factory.prototype.create;
+    Factory.prototype.create = function (mechs: string[]) {
+        if (mechs.includes("PLAIN")) return orig.call(this, ["PLAIN"]);
+        return orig.call(this, mechs);
+    };
+}
 
 const DEFAULT_JID = "pi@xmpp.glvortex.net";
 const DEFAULT_ALLOW = "tsb@xmpp.glvortex.net";
@@ -93,7 +110,8 @@ export default function (pi: PhonePi) {
         }
         const username = jid.slice(0, at);
         const domain = jid.slice(at + 1);
-        const service = process.env.PI_XMPP_SERVICE ?? domain;
+        const service =
+            process.env.PI_XMPP_SERVICE ?? `xmpp://${domain}:5222`;
 
         const conn = client({
             service,
@@ -146,10 +164,12 @@ export default function (pi: PhonePi) {
                         if (!body?.trim()) return;
                         peer = from;
                         if (ctx.isIdle()) pi.sendUserMessage(body);
-                        else pi.sendUserMessage(body, { deliverAs: "followUp" });
+                        else
+                            pi.sendUserMessage(body, { deliverAs: "followUp" });
                     })
                     .catch((err: unknown) => {
-                        const msg = err instanceof Error ? err.message : String(err);
+                        const msg =
+                            err instanceof Error ? err.message : String(err);
                         ctx.ui.notify(`phone decrypt: ${msg}`, "error");
                     });
             },

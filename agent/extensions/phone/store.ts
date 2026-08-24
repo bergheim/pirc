@@ -1,4 +1,10 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+    chmodSync,
+    mkdirSync,
+    readFileSync,
+    renameSync,
+    writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import type { KeyPair, OMEMOStore } from "libomemo.js";
 import { abToB64, b64ToAb } from "./payload.ts";
@@ -41,6 +47,7 @@ export class FileStore implements OMEMOStore {
         try {
             const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
             this.store = (revive(raw) as Record<string, unknown>) ?? {};
+            chmodSync(path, 0o600);
         } catch {
             this.store = {};
         }
@@ -49,8 +56,11 @@ export class FileStore implements OMEMOStore {
     persist(): void {
         mkdirSync(dirname(this.path), { recursive: true });
         const tmp = `${this.path}.tmp`;
-        writeFileSync(tmp, JSON.stringify(encode(this.store)));
+        writeFileSync(tmp, JSON.stringify(encode(this.store)), {
+            mode: 0o600,
+        });
         renameSync(tmp, this.path);
+        chmodSync(this.path, 0o600);
     }
 
     put(key: string, value: unknown): void {

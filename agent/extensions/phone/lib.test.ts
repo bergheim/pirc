@@ -6,6 +6,7 @@ import {
     assistantText,
     bareJid,
     chunkText,
+    inboundFrom,
     userText,
 } from "./lib.ts";
 
@@ -15,6 +16,38 @@ test("bareJid strips resource and lowercases", () => {
         "tsb@xmpp.glvortex.net",
     );
     assert.equal(bareJid("tsb@xmpp.glvortex.net"), "tsb@xmpp.glvortex.net");
+});
+
+test("inboundFrom rejects forged received carbons", () => {
+    const self = "pi@xmpp.glvortex.net";
+    const peer = "tsb@xmpp.glvortex.net/phone";
+    assert.equal(
+        inboundFrom({
+            outerFrom: self,
+            innerFrom: peer,
+            receivedCarbon: true,
+            self,
+        }),
+        peer,
+    );
+    assert.equal(
+        inboundFrom({
+            outerFrom: "evil@xmpp.glvortex.net",
+            innerFrom: peer,
+            receivedCarbon: true,
+            self,
+        }),
+        undefined,
+    );
+    assert.equal(
+        inboundFrom({
+            outerFrom: peer,
+            innerFrom: peer,
+            receivedCarbon: false,
+            self,
+        }),
+        peer,
+    );
 });
 
 test("allowedFrom matches bare JID only", () => {

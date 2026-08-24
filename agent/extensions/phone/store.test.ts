@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileStore } from "./store.ts";
@@ -18,6 +18,7 @@ test("FileStore persists ArrayBuffers", () => {
     const id = b.getIdentityKeyPair();
     assert.ok(id);
     assert.deepEqual([...new Uint8Array(id.pubKey)], [1, 2, 3]);
+    assert.equal(statSync(path).mode & 0o777, 0o600);
 });
 
 test("TOFU trusts first identity and rejects a swap", () => {

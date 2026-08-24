@@ -7,6 +7,25 @@ export function allowedFrom(from: string, allow: string): boolean {
     return bareJid(from) === bareJid(allow);
 }
 
+/** Received-carbon inner from is only trusted if the outer stanza is us. */
+export function inboundFrom(args: {
+    outerFrom: string | undefined;
+    innerFrom: string | undefined;
+    receivedCarbon: boolean;
+    self: string;
+}): string | undefined {
+    if (args.receivedCarbon) {
+        if (
+            !args.outerFrom ||
+            bareJid(args.outerFrom) !== bareJid(args.self)
+        ) {
+            return undefined;
+        }
+        return args.innerFrom;
+    }
+    return args.innerFrom ?? args.outerFrom;
+}
+
 export function chunkText(text: string, max = 4000): string[] {
     if (text.length <= max) return [text];
     const out: string[] = [];

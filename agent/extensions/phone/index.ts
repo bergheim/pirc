@@ -10,6 +10,7 @@ import {
     assistantText,
     bareJid,
     chunkText,
+    inboundFrom,
     userText,
 } from "./lib.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
@@ -182,12 +183,20 @@ export default function (pi: PhonePi) {
                 } catch {
                     /* ignore */
                 }
+                const carbon = stanza.getChild(
+                    "received",
+                    "urn:xmpp:carbons:2",
+                );
                 const inner =
-                    stanza
-                        .getChild("received", "urn:xmpp:carbons:2")
+                    carbon
                         ?.getChild("forwarded", "urn:xmpp:forward:0")
                         ?.getChild("message") ?? stanza;
-                const from = inner.attrs?.from ?? stanza.attrs.from;
+                const from = inboundFrom({
+                    outerFrom: stanza.attrs.from,
+                    innerFrom: inner.attrs?.from ?? stanza.attrs.from,
+                    receivedCarbon: Boolean(carbon),
+                    self: jid,
+                });
                 if (!from || !allowedFrom(from, allow)) return;
                 const inject = (body: string) => {
                     peer = from;
@@ -202,9 +211,7 @@ export default function (pi: PhonePi) {
                                     !ctx.isIdle() &&
                                     Date.now() - t0 < 15_000
                                 ) {
-                                    await new Promise((r) =>
-                                        setTimeout(r, 50),
-                                    );
+                                    await new Promise((r) => setTimeout(r, 50));
                                 }
                             }
                             pi.sendUserMessage(body);
@@ -217,33 +224,23 @@ export default function (pi: PhonePi) {
                             ctx.ui.notify(`phone inject: ${msg}`, "error");
                         });
                 };
-                const plain = inner.getChildText?.("body")?.trim();
                 const encrypted =
                     inner.getChild?.("encrypted", NS) ??
                     inner.getChild?.("encrypted");
-                if (encrypted && omemo) {
-                    void omemo
-                        .decrypt(
-                            from,
-                            encrypted as Parameters<Omemo["decrypt"]>[1],
-                        )
-                        .then((body) => {
-                            if (body?.trim()) inject(body);
-                            else if (plain) inject(plain);
-                        })
-                        .catch((err: unknown) => {
-                            if (plain) inject(plain);
-                            else {
-                                const msg =
-                                    err instanceof Error
-                                        ? err.message
-                                        : String(err);
-                                ctx.ui.notify(`phone decrypt: ${msg}`, "error");
-                            }
-                        });
-                    return;
-                }
-                if (plain) inject(plain);
+                if (!encrypted || !omemo) return;
+                void omemo
+                    .decrypt(
+                        from,
+                        encrypted as Parameters<Omemo["decrypt"]>[1],
+                    )
+                    .then((body) => {
+                        if (body?.trim()) inject(body);
+                    })
+                    .catch((err: unknown) => {
+                        const msg =
+                            err instanceof Error ? err.message : String(err);
+                        ctx.ui.notify(`phone decrypt: ${msg}`, "error");
+                    });
             },
         );
 

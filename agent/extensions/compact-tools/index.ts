@@ -92,6 +92,7 @@ let density: Density = loadDensity();
 type Theme = {
 	fg: (key: string, text: string) => string;
 	bold: (text: string) => string;
+	bg?: (key: string, text: string) => string;
 };
 
 const TOOL_ICON = {
@@ -135,10 +136,30 @@ function cwdOf(ctx: { cwd?: string } | undefined): string {
 	return ctx?.cwd || process.cwd();
 }
 
-/** Stock-ish path display (relative to cwd, else ~). */
+/** Stock tool-box bg. Same fn for title / preview / full so ctrl+b doesn't recolor. */
+function toolBg(
+	theme: Theme,
+	context: { isPartial?: boolean; isError?: boolean },
+): ((s: string) => string) | undefined {
+	if (!theme.bg) return undefined;
+	let slot = "toolSuccessBg";
+	if (context.isPartial) slot = "toolPendingBg";
+	else if (context.isError) slot = "toolErrorBg";
+	return (s) => theme.bg(slot, s);
+}
+
 /** Reuse last Text component like stock renderers. */
-function callText(context: { lastComponent?: unknown }, line: string): Text {
+function paintedText(
+	context: {
+		lastComponent?: unknown;
+		isPartial?: boolean;
+		isError?: boolean;
+	},
+	theme: Theme,
+	line: string,
+): Text {
 	const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+	text.setCustomBgFn(toolBg(theme, context));
 	text.setText(line);
 	return text;
 }
@@ -261,12 +282,19 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
+	/** Title mode drops the Box shell. pi reads renderShell live per render, so it
+	 * has to stay a getter — a spread would freeze today's value. */
+	const registerTool = (tool: Parameters<typeof pi.registerTool>[0]): void =>
+		pi.registerTool(
+			Object.defineProperty(tool, "renderShell", {
+				get: () => (density === "title" ? "self" : "default"),
+				configurable: true,
+			}),
+		);
+
 	// --- bash ---
-	pi.registerTool({
+	registerTool({
 		name: "bash",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "bash",
 		description: "Execute a bash command in the current working directory.",
 		parameters: createBashTool(process.cwd()).parameters,
@@ -289,14 +317,14 @@ export default function (pi: ExtensionAPI) {
 			if (args?.timeout != null) {
 				line += theme.fg("muted", ` (timeout ${args.timeout}s)`);
 			}
-			return callText(context, line);
+			return paintedText(context, theme, line);
 		},
 
 		renderResult(result, { isPartial }, theme, context) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … running"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … running"));
 			}
 
 			const output = textContent(result);
@@ -309,7 +337,12 @@ export default function (pi: ExtensionAPI) {
 			const exitCode = exitMatch ? Number(exitMatch[1]) : failed ? "?" : 0;
 
 			if (density === "title") {
-				if (failed) return new Text(statusErr(theme, `  ✗ exit ${exitCode}`), 0, 0);
+				if (failed)
+					return paintedText(
+						context,
+						theme,
+						statusErr(theme, `  ✗ exit ${exitCode}`),
+					);
 				return emptyResult();
 			}
 
@@ -320,20 +353,17 @@ export default function (pi: ExtensionAPI) {
 			if (details?.truncation?.truncated)
 				status += theme.fg("warning", " truncated");
 
-			return new Text(
+			return paintedText(
+				context,
+				theme,
 				status + bodyForMode(theme, output, PREVIEW_BASH_LINES),
-				0,
-				0,
 			);
 		},
 	});
 
 	// --- read ---
-	pi.registerTool({
+	registerTool({
 		name: "read",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "read",
 		description: "Read a file.",
 		parameters: createReadTool(process.cwd()).parameters,
@@ -358,25 +388,25 @@ export default function (pi: ExtensionAPI) {
 				if (args?.limit != null) parts.push(`limit=${args.limit}`);
 				line += theme.fg("muted", ` (${parts.join(", ")})`);
 			}
-			return callText(context, line);
+			return paintedText(context, theme, line);
 		},
 
 		renderResult(result, { isPartial }, theme, context) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … reading"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … reading"));
 			}
 			if (context.isError) {
 				const msg = truncate(textContent(result).split("\n")[0] || "error", 80);
-				return new Text(statusErr(theme, `  ✗ ${msg}`), 0, 0);
+				return paintedText(context, theme, statusErr(theme, `  ✗ ${msg}`));
 			}
 
 			const content = result.content[0];
 			if (content?.type === "image") {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusOk(theme, "  ✓ image"), 0, 0);
+					: paintedText(context, theme, statusOk(theme, "  ✓ image"));
 			}
 
 			const output = textContent(result);
@@ -389,20 +419,17 @@ export default function (pi: ExtensionAPI) {
 			if (details?.truncation?.truncated) {
 				status += theme.fg("warning", ` of ${details.truncation.totalLines}`);
 			}
-			return new Text(
+			return paintedText(
+				context,
+				theme,
 				status + bodyForMode(theme, output, PREVIEW_GENERIC_LINES),
-				0,
-				0,
 			);
 		},
 	});
 
 	// --- grep ---
-	pi.registerTool({
+	registerTool({
 		name: "grep",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "grep",
 		description: "Search file contents for patterns.",
 		parameters: createGrepTool(process.cwd()).parameters,
@@ -427,8 +454,9 @@ export default function (pi: ExtensionAPI) {
 			const parts = [pattern ? truncate(pattern, CALL_ARG_MAX) : "..."];
 			if (path) parts.push(path);
 			if (args?.glob) parts.push(String(args.glob));
-			return callText(
+			return paintedText(
 				context,
+				theme,
 				`${toolTitle(theme, "grep")} ${theme.fg("toolOutput", parts.join(" "))}`,
 			);
 		},
@@ -437,16 +465,16 @@ export default function (pi: ExtensionAPI) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … searching"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … searching"));
 			}
 			if (context.isError) {
-				return new Text(
+				return paintedText(
+					context,
+					theme,
 					statusErr(
 						theme,
 						`  ✗ ${truncate(textContent(result).split("\n")[0] || "error", 80)}`,
 					),
-					0,
-					0,
 				);
 			}
 
@@ -459,20 +487,17 @@ export default function (pi: ExtensionAPI) {
 			if (details?.matchLimitReached) status += theme.fg("warning", " limit");
 			if (details?.truncation?.truncated || details?.linesTruncated)
 				status += theme.fg("warning", " trunc");
-			return new Text(
+			return paintedText(
+				context,
+				theme,
 				status + bodyForMode(theme, output, PREVIEW_GENERIC_LINES),
-				0,
-				0,
 			);
 		},
 	});
 
 	// --- find ---
-	pi.registerTool({
+	registerTool({
 		name: "find",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "find",
 		description: "Find files by glob pattern.",
 		parameters: createFindTool(process.cwd()).parameters,
@@ -494,8 +519,9 @@ export default function (pi: ExtensionAPI) {
 					? "..."
 					: truncate(String(args.pattern), CALL_ARG_MAX);
 			const path = displayPath(args?.path, cwdOf(context));
-			return callText(
+			return paintedText(
 				context,
+				theme,
 				`${toolTitle(theme, "find")} ${theme.fg("toolOutput", `${path} ${pattern}`)}`,
 			);
 		},
@@ -504,16 +530,16 @@ export default function (pi: ExtensionAPI) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … finding"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … finding"));
 			}
 			if (context.isError) {
-				return new Text(
+				return paintedText(
+					context,
+					theme,
 					statusErr(
 						theme,
 						`  ✗ ${truncate(textContent(result).split("\n")[0] || "error", 80)}`,
 					),
-					0,
-					0,
 				);
 			}
 
@@ -524,20 +550,17 @@ export default function (pi: ExtensionAPI) {
 			const n = output.trim() ? lineCount(output) : 0;
 			let status = statusOk(theme, "  ✓") + theme.fg("muted", ` ${n} files`);
 			if (details?.resultLimitReached) status += theme.fg("warning", " limit");
-			return new Text(
+			return paintedText(
+				context,
+				theme,
 				status + bodyForMode(theme, output, PREVIEW_GENERIC_LINES),
-				0,
-				0,
 			);
 		},
 	});
 
 	// --- ls ---
-	pi.registerTool({
+	registerTool({
 		name: "ls",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "ls",
 		description: "List directory contents.",
 		parameters: createLsTool(process.cwd()).parameters,
@@ -558,23 +581,23 @@ export default function (pi: ExtensionAPI) {
 			const path = displayPath(raw, cwdOf(context));
 			let line = `${toolTitle(theme, "ls")} ${theme.fg("toolOutput", path)}`;
 			if (args?.limit != null) line += theme.fg("muted", ` (limit ${args.limit})`);
-			return callText(context, line);
+			return paintedText(context, theme, line);
 		},
 
 		renderResult(result, { isPartial }, theme, context) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … listing"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … listing"));
 			}
 			if (context.isError) {
-				return new Text(
+				return paintedText(
+					context,
+					theme,
 					statusErr(
 						theme,
 						`  ✗ ${truncate(textContent(result).split("\n")[0] || "error", 80)}`,
 					),
-					0,
-					0,
 				);
 			}
 
@@ -585,20 +608,17 @@ export default function (pi: ExtensionAPI) {
 			const n = output.trim() ? lineCount(output) : 0;
 			let status = statusOk(theme, "  ✓") + theme.fg("muted", ` ${n} entries`);
 			if (details?.entryLimitReached) status += theme.fg("warning", " limit");
-			return new Text(
+			return paintedText(
+				context,
+				theme,
 				status + bodyForMode(theme, output, PREVIEW_GENERIC_LINES),
-				0,
-				0,
 			);
 		},
 	});
 
 	// --- edit ---
-	pi.registerTool({
+	registerTool({
 		name: "edit",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "edit",
 		description: "Edit a file.",
 		parameters: createEditTool(process.cwd()).parameters,
@@ -616,8 +636,9 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme, context) {
 			const path = displayPath(args?.path ?? args?.file_path, cwdOf(context));
-			return callText(
+			return paintedText(
 				context,
+				theme,
 				`${toolTitle(theme, "edit")} ${theme.fg("toolOutput", path)}`,
 			);
 		},
@@ -626,16 +647,16 @@ export default function (pi: ExtensionAPI) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … editing"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … editing"));
 			}
 			if (context.isError) {
-				return new Text(
+				return paintedText(
+					context,
+					theme,
 					statusErr(
 						theme,
 						`  ✗ ${truncate(textContent(result).split("\n")[0] || "error", 80)}`,
 					),
-					0,
-					0,
 				);
 			}
 
@@ -643,7 +664,7 @@ export default function (pi: ExtensionAPI) {
 			if (!details?.diff) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusOk(theme, "  ✓ applied"), 0, 0);
+					: paintedText(context, theme, statusOk(theme, "  ✓ applied"));
 			}
 
 			const diffLines = details.diff.split("\n");
@@ -675,16 +696,13 @@ export default function (pi: ExtensionAPI) {
 				body +=
 					"\n" + theme.fg("muted", `… ${diffLines.length - max} more diff lines`);
 			}
-			return new Text(status + body, 0, 0);
+			return paintedText(context, theme, status + body);
 		},
 	});
 
 	// --- write ---
-	pi.registerTool({
+	registerTool({
 		name: "write",
-		get renderShell() {
-			return density === "title" ? "self" : "default";
-		},
 		label: "write",
 		description: "Write a file.",
 		parameters: createWriteTool(process.cwd()).parameters,
@@ -702,8 +720,9 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme, context) {
 			const path = displayPath(args?.path ?? args?.file_path, cwdOf(context));
-			return callText(
+			return paintedText(
 				context,
+				theme,
 				`${toolTitle(theme, "write")} ${theme.fg("toolOutput", path)}`,
 			);
 		},
@@ -712,21 +731,21 @@ export default function (pi: ExtensionAPI) {
 			if (isPartial) {
 				return density === "title"
 					? emptyResult()
-					: new Text(statusRun(theme, "  … writing"), 0, 0);
+					: paintedText(context, theme, statusRun(theme, "  … writing"));
 			}
 			if (context.isError) {
-				return new Text(
+				return paintedText(
+					context,
+					theme,
 					statusErr(
 						theme,
 						`  ✗ ${truncate(textContent(result).split("\n")[0] || "error", 80)}`,
 					),
-					0,
-					0,
 				);
 			}
 			return density === "title"
 				? emptyResult()
-				: new Text(statusOk(theme, "  ✓ written"), 0, 0);
+				: paintedText(context, theme, statusOk(theme, "  ✓ written"));
 		},
 	});
 }

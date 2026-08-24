@@ -288,7 +288,7 @@ export default function (pi: PhonePi) {
                 return;
             }
             try {
-                await sendChat(peer, incoming);
+                await sendChat(peer, `[tui] ${incoming}`);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.error(`phone send: ${msg}`);

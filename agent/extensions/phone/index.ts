@@ -165,7 +165,8 @@ export default function (pi: PhonePi) {
         }
         const username = jid.slice(0, at);
         const domain = jid.slice(at + 1);
-        const service = process.env.PI_XMPP_SERVICE ?? `xmpp://${domain}:5222`;
+        const service =
+            process.env.PI_XMPP_SERVICE ?? `xmpps://${domain}:5223`;
 
         const conn = client({
             service,

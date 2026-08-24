@@ -1,0 +1,11 @@
+{
+    "name": "pi-phone-xmpp",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@xmpp/client": "^0.13.6"
+    },
+    "devDependencies": {
+        "@types/node": "^24.5.2"
+    }
+}

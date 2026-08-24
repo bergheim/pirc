@@ -1,6 +1,6 @@
 {
   "lastChangelogVersion": "0.84.2",
-  "theme": "crew-solarized-light",
+  "theme": "crew-catppuccin-latte",
   "defaultProvider": "xai",
   "defaultModel": "grok-4.6",
   "npmCommand": [

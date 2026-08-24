@@ -22,3 +22,5 @@ agent/extensions/caveman-native.js
 
 # personal agent memory
 MEMORY.md
+
+agent/pi-debug.log

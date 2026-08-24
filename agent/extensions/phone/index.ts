@@ -1,5 +1,6 @@
 /// <reference types="node" />
 /// <reference path="./xmpp.d.ts" />
+import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -156,25 +157,47 @@ export default function (pi: PhonePi) {
                 getChild: (
                     name: string,
                     ns?: string,
-                ) => Parameters<Omemo["decrypt"]>[1] | undefined;
+                ) =>
+                    | Parameters<Omemo["decrypt"]>[1]
+                    | {
+                          getChild: (
+                              name: string,
+                              ns?: string,
+                          ) => Parameters<Omemo["decrypt"]>[1] | undefined;
+                      }
+                    | undefined;
                 getChildText: (name: string) => string | undefined;
+                toString?: () => string;
             }) => {
                 if (!stanza.is("message")) return;
                 const type = stanza.attrs.type;
                 if (type === "groupchat" || type === "error") return;
-                const from = stanza.attrs.from;
+                try {
+                    appendFileSync(
+                        join(homedir(), ".pi", "agent", "phone-in.log"),
+                        `${new Date().toISOString()} ${stanza.toString?.() ?? ""}\n`,
+                    );
+                } catch {
+                    /* ignore */
+                }
+                const inner =
+                    stanza
+                        .getChild("received", "urn:xmpp:carbons:2")
+                        ?.getChild("forwarded", "urn:xmpp:forward:0")
+                        ?.getChild("message") ?? stanza;
+                const from = inner.attrs?.from ?? stanza.attrs.from;
                 if (!from || !allowedFrom(from, allow)) return;
                 const encrypted =
-                    stanza.getChild("encrypted", NS) ??
-                    stanza.getChild("encrypted");
+                    inner.getChild?.("encrypted", NS) ??
+                    inner.getChild?.("encrypted");
                 if (!encrypted || !omemo) {
-                    if (stanza.getChildText("body")?.trim()) {
+                    if (inner.getChildText?.("body")?.trim()) {
                         ctx.ui.notify("phone: ignored plaintext", "warning");
                     }
                     return;
                 }
                 void omemo
-                    .decrypt(from, encrypted)
+                    .decrypt(from, encrypted as Parameters<Omemo["decrypt"]>[1])
                     .then((body) => {
                         if (!body?.trim()) {
                             ctx.ui.notify(
@@ -200,6 +223,15 @@ export default function (pi: PhonePi) {
         try {
             await conn.start();
             await conn.send(xml("presence"));
+            await conn.iqCaller
+                .request(
+                    xml(
+                        "iq",
+                        { type: "set" },
+                        xml("enable", { xmlns: "urn:xmpp:carbons:2" }),
+                    ),
+                )
+                .catch(() => undefined);
             omemo = await Omemo.create(
                 conn,
                 process.env.PI_OMEMO_STORE ??

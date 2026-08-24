@@ -3,15 +3,11 @@ import {
     OMEMOAddress,
     SessionBuilder,
     SessionCipher,
+    type DecryptResult,
 } from "libomemo.js";
 import { xml } from "@xmpp/client";
 import { FileStore } from "./store.ts";
-import {
-    abToB64,
-    b64ToAb,
-    decryptPayload,
-    encryptPayload,
-} from "./payload.ts";
+import { abToB64, b64ToAb, decryptPayload, encryptPayload } from "./payload.ts";
 import { bareJid } from "./lib.ts";
 
 export const NS = "eu.siacs.conversations.axolotl";
@@ -39,7 +35,12 @@ export class Omemo {
     readonly ourJid: string;
     readonly allowJid: string;
 
-    constructor(conn: XmppIq, store: FileStore, ourJid: string, allowJid: string) {
+    constructor(
+        conn: XmppIq,
+        store: FileStore,
+        ourJid: string,
+        allowJid: string,
+    ) {
         this.conn = conn;
         this.store = store;
         this.ourJid = ourJid;
@@ -59,7 +60,12 @@ export class Omemo {
         allowJid: string,
     ): Promise<Omemo> {
         const store = new FileStore(storePath);
-        const omemo = new Omemo(conn, store, bareJid(ourJid), bareJid(allowJid));
+        const omemo = new Omemo(
+            conn,
+            store,
+            bareJid(ourJid),
+            bareJid(allowJid),
+        );
         await omemo.ensureIdentity();
         await omemo.publish();
         return omemo;
@@ -122,16 +128,31 @@ export class Omemo {
             new OMEMOAddress(peer, sid),
             NS,
         );
-        const prekey = mine?.attrs.prekey === "true";
-        const result = prekey
-            ? await cipher.decryptPreKeyWhisperMessage(keyB64, "base64")
-            : await cipher.decryptWhisperMessage(keyB64, "base64");
+        const prekey =
+            mine?.attrs.prekey === "true" || mine?.attrs.prekey === "1";
+        let result: DecryptResult;
+        try {
+            result = prekey
+                ? await cipher.decryptPreKeyWhisperMessage(keyB64, "base64")
+                : await cipher.decryptWhisperMessage(keyB64, "base64");
+        } catch {
+            result = prekey
+                ? await cipher.decryptWhisperMessage(keyB64, "base64")
+                : await cipher.decryptPreKeyWhisperMessage(keyB64, "base64");
+        }
         if (prekey) await this.publishBundle();
-        return decryptPayload(result.plaintext, b64ToAb(payloadB64), b64ToAb(ivB64));
+        return decryptPayload(
+            result.plaintext,
+            b64ToAb(payloadB64),
+            b64ToAb(ivB64),
+        );
     }
 
     private async ensureIdentity(): Promise<void> {
-        if (this.store.getIdentityKeyPair() && this.store.getLocalRegistrationId()) {
+        if (
+            this.store.getIdentityKeyPair() &&
+            this.store.getLocalRegistrationId()
+        ) {
             return;
         }
         const identity = await KeyHelper.generateIdentityKeyPair();
@@ -188,7 +209,8 @@ export class Omemo {
         const signedId = this.store.get<number>("signedPreKeyId") ?? 1;
         const signed = this.store.loadSignedPreKey(signedId);
         const sig = this.store.get<ArrayBuffer>("signedPreKeySignature");
-        if (!identity || !signed || !sig) throw new Error("omemo bundle incomplete");
+        if (!identity || !signed || !sig)
+            throw new Error("omemo bundle incomplete");
         const prekeys = [];
         for (const key of Object.keys(this.store.store)) {
             if (!key.startsWith("25519KeypreKey")) continue;
@@ -196,11 +218,7 @@ export class Omemo {
             const pair = this.store.get<{ pubKey: ArrayBuffer }>(key);
             if (!pair) continue;
             prekeys.push(
-                xml(
-                    "preKeyPublic",
-                    { preKeyId: id },
-                    abToB64(pair.pubKey),
-                ),
+                xml("preKeyPublic", { preKeyId: id }, abToB64(pair.pubKey)),
             );
         }
         await this.conn.iqCaller.request(
@@ -225,7 +243,11 @@ export class Omemo {
                                     abToB64(signed.keyPair.pubKey),
                                 ),
                                 xml("signedPreKeySignature", {}, abToB64(sig)),
-                                xml("identityKey", {}, abToB64(identity.pubKey)),
+                                xml(
+                                    "identityKey",
+                                    {},
+                                    abToB64(identity.pubKey),
+                                ),
                                 xml("prekeys", {}, ...prekeys),
                             ),
                         ),
@@ -297,9 +319,11 @@ export class Omemo {
             ?.getChild("bundle", NS);
         if (!bundle) throw new Error(`no bundle for ${jid}:${deviceId}`);
         const spk = bundle.getChild("signedPreKeyPublic");
-        const preEls = bundle.getChild("prekeys")?.getChildren("preKeyPublic") ?? [];
+        const preEls =
+            bundle.getChild("prekeys")?.getChildren("preKeyPublic") ?? [];
         const pick = preEls[Math.floor(Math.random() * preEls.length)];
-        if (!spk || !pick) throw new Error(`incomplete bundle ${jid}:${deviceId}`);
+        if (!spk || !pick)
+            throw new Error(`incomplete bundle ${jid}:${deviceId}`);
         const identityText = bundle.getChildText("identityKey");
         const sigText = bundle.getChildText("signedPreKeySignature");
         const spkText = spk.getText();
@@ -322,4 +346,3 @@ export class Omemo {
         };
     }
 }
-

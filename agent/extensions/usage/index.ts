@@ -54,8 +54,6 @@ function plainSegment(status: ProviderStatus): string {
   if ("stale" in status) return `${label} —`;
   const { sessionPercent, weeklyPercent } = status.usage;
   if (weeklyOnly(status)) return `${label} ${Math.round(weeklyPercent)}% wk`;
-  if (status.name === "antigravity")
-    return `${label} ${Math.round(sessionPercent)}%`;
   return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
 }
 

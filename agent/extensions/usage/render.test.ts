@@ -17,7 +17,11 @@ import {
   TONE,
   type CurrentSession,
 } from "./render.ts";
-import { parseCodexUsage, parseGrokBilling } from "./parse.ts";
+import {
+  parseCodexUsage,
+  parseGoogleQuota,
+  parseGrokBilling,
+} from "./parse.ts";
 import { recentEditedPaths } from "./index.ts";
 
 const theme = {
@@ -238,6 +242,66 @@ test("parseCodexUsage classifies 5h vs weekly by duration", () => {
   assert.ok(weeklyOnly);
   assert.equal(weeklyOnly.sessionIsFiveHour, false);
   assert.equal(weeklyOnly.weeklyPercent, 74);
+});
+
+test("parseGoogleQuota reads weekly-only summary groups", () => {
+  const now = Date.parse("2026-08-24T21:01:14Z");
+  const usage = parseGoogleQuota(
+    {
+      groups: [
+        {
+          buckets: [
+            {
+              bucketId: "gemini-weekly",
+              window: "weekly",
+              resetTime: "2026-08-31T06:26:55Z",
+              remainingFraction: 0.9884992,
+            },
+          ],
+        },
+        {
+          buckets: [
+            {
+              bucketId: "3p-weekly",
+              window: "weekly",
+              resetTime: "2026-08-31T21:01:15Z",
+              remainingFraction: 1,
+            },
+          ],
+        },
+      ],
+    },
+    now,
+  );
+  assert.ok(usage);
+  assert.equal(usage.sessionIsFiveHour, false);
+  assert.ok(usage.weeklyPercent > 1 && usage.weeklyPercent < 2);
+  assert.equal(usage.weeklyPercent, usage.sessionPercent);
+});
+
+test("parseGoogleQuota keeps 5h when a group reports it", () => {
+  const usage = parseGoogleQuota({
+    groups: [
+      {
+        buckets: [
+          {
+            window: "5h",
+            remainingFraction: 0.5,
+            resetTime: "2026-08-24T22:00:00Z",
+          },
+          {
+            window: "weekly",
+            remainingFraction: 0.75,
+            resetTime: "2026-08-31T06:00:00Z",
+          },
+        ],
+      },
+    ],
+  });
+  assert.ok(usage);
+  assert.equal(usage.sessionIsFiveHour, true);
+  assert.equal(usage.sessionPercent, 50);
+  assert.equal(usage.weeklyPercent, 25);
 });
 
 test("parseGrokBilling reads weekly credits", () => {

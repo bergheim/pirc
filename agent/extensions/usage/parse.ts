@@ -153,15 +153,84 @@ function mostUsed(buckets: unknown[]): number | null {
   return best;
 }
 
-// cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota:
-// { buckets: [{ tokenType, modelId, remainingFraction }] } — not the
-// top-level `quotaBuckets` originally guessed. Buckets are filtered to
-// tokenType "REQUESTS" (falling back to all buckets when none match), then
-// split into gemini-pro (session) and gemini-flash (weekly) groups,
-// mirroring the gemini branch of the reference's per-model bucket
-// selection. The antigravity branch also weighs claude-model buckets, which
-// needs a provider hint this single-arg parser doesn't take.
-export function parseGoogleQuota(payload: unknown): Usage | null {
+function windowName(bucket: unknown): string {
+  return String(obj(bucket)?.window ?? "").toLowerCase();
+}
+
+function isWeeklyWindow(name: string): boolean {
+  return /week|7d|seven/.test(name);
+}
+
+function isFiveHourWindow(name: string): boolean {
+  return /5h|five.?hour|^hour|session/.test(name) && !isWeeklyWindow(name);
+}
+
+function resetSeconds(bucket: unknown, nowMs: number): number | null {
+  const raw = obj(bucket)?.resetTime;
+  return typeof raw === "string" ? secondsUntil(raw, nowMs) : null;
+}
+
+function flattenSummaryBuckets(payload: unknown): unknown[] {
+  const groups = obj(payload)?.groups;
+  if (!Array.isArray(groups)) return [];
+  const out: unknown[] = [];
+  for (const group of groups) {
+    const buckets = obj(group)?.buckets;
+    if (Array.isArray(buckets)) out.push(...buckets);
+  }
+  return out;
+}
+
+function mostUsedBucket(buckets: unknown[]): unknown | null {
+  let best: unknown | null = null;
+  let bestUsed = -1;
+  for (const bucket of buckets) {
+    const used = usedPercent(bucket);
+    if (used !== null && used > bestUsed) {
+      best = bucket;
+      bestUsed = used;
+    }
+  }
+  return best;
+}
+
+// cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary:
+// { groups: [{ buckets: [{ window, remainingFraction, resetTime }] }] }
+// Google AI Plus currently reports weekly-only groups. Older
+// retrieveUserQuota `{ buckets: [{ tokenType, modelId, remainingFraction }] }`
+// is still accepted as a fallback.
+export function parseGoogleQuota(
+  payload: unknown,
+  nowMs = Date.now(),
+): Usage | null {
+  const summary = flattenSummaryBuckets(payload);
+  if (summary.length > 0) {
+    const short = summary.filter((b) => isFiveHourWindow(windowName(b)));
+    const long = summary.filter((b) => isWeeklyWindow(windowName(b)));
+    const shortBest = mostUsedBucket(short);
+    const longBest = mostUsedBucket(long);
+    if (shortBest && longBest) {
+      return {
+        sessionPercent: usedPercent(shortBest) ?? 0,
+        weeklyPercent: usedPercent(longBest) ?? 0,
+        resetsInSeconds: resetSeconds(shortBest, nowMs),
+        weeklyResetsInSeconds: resetSeconds(longBest, nowMs),
+        sessionIsFiveHour: true,
+      };
+    }
+    const only = longBest ?? shortBest;
+    if (!only) return null;
+    const used = usedPercent(only);
+    if (used === null) return null;
+    return {
+      sessionPercent: used,
+      weeklyPercent: used,
+      resetsInSeconds: resetSeconds(only, nowMs),
+      weeklyResetsInSeconds: resetSeconds(only, nowMs),
+      sessionIsFiveHour: Boolean(shortBest),
+    };
+  }
+
   const buckets = obj(payload)?.buckets;
   if (!Array.isArray(buckets) || buckets.length === 0) return null;
 

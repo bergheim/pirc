@@ -3,11 +3,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  readCodexCredential, readAnthropicCredential, readAntigravityCredential,
+  readCodexCredential,
+  readAnthropicCredential,
+  readAntigravityCredential,
   readXaiCredential,
 } from "./auth.ts";
 import {
-  parseCodexUsage, parseAnthropicUsage, parseGoogleQuota, parseGrokBilling,
+  parseCodexUsage,
+  parseAnthropicUsage,
+  parseGoogleQuota,
+  parseGrokBilling,
   type Usage,
 } from "./parse.ts";
 
@@ -49,7 +54,9 @@ async function fetchWithTimeout(
     // uncleared timer here would reject `timeout` with no handler attached
     // once construction never reached Promise.race, crashing the process
     // five seconds later on an orphaned unhandled rejection.
-    const request = Promise.resolve().then(() => fetchImpl(url, { ...init, signal: controller.signal }));
+    const request = Promise.resolve().then(() =>
+      fetchImpl(url, { ...init, signal: controller.signal }),
+    );
     // Once raced away, a request that eventually settles must not surface
     // as an unhandled rejection.
     request.catch(() => {});
@@ -65,7 +72,11 @@ async function fetchWithTimeout(
 // the key is derived from a live credential's tail characters.
 export function cachePathFor(provider: string, accountKey: string): string {
   const uid = String(process.getuid?.() ?? "nouid");
-  const safe = crypto.createHash("sha256").update(accountKey).digest("hex").slice(0, 16);
+  const safe = crypto
+    .createHash("sha256")
+    .update(accountKey)
+    .digest("hex")
+    .slice(0, 16);
   return path.join(os.tmpdir(), "pi-usage", uid, provider, `${safe}.json`);
 }
 
@@ -110,93 +121,76 @@ function writeCache(file: string, usage: Usage, nowMs: number): void {
   }
 }
 
-// --- Google (Antigravity) needs a Cloud Code project id before it will hand
-// out quota, and the retrieveUserQuota call itself is a POST with a specific
-// header set — nothing like the plain bearer-token GETs codex/claude use.
-// Shape verified against the reference's googleHeaders/googleMetadata/
-// discoverGoogleProjectId/fetchGoogleUsage (see task-9-report.md).
-
-function googleMetadata(projectId?: string) {
-  return {
-    ideType: "IDE_UNSPECIFIED",
-    platform: "PLATFORM_UNSPECIFIED",
-    pluginType: "GEMINI",
-    ...(projectId ? { duetProject: projectId } : {}),
-  };
-}
-
-function googleHeaders(token: string, projectId?: string) {
+// Consumer Antigravity (Google AI Plus) answers retrieveUserQuotaSummary
+// with no project id. The old loadCodeAssist + retrieveUserQuota path is
+// Gemini Code Assist for individuals and now returns UNSUPPORTED_CLIENT.
+function googleHeaders(token: string) {
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    "User-Agent": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+    "User-Agent": "antigravity/1.1.13 linux/amd64",
     "X-Goog-Api-Client": "gl-node/22.17.0",
-    "Client-Metadata": JSON.stringify(googleMetadata(projectId)),
+    "Client-Metadata": JSON.stringify({
+      ideType: "ANTIGRAVITY",
+      platform: "PLATFORM_UNSPECIFIED",
+      pluginType: "GEMINI",
+    }),
   };
 }
 
-const GOOGLE_QUOTA_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
-const GOOGLE_LOAD_CODE_ASSIST_ENDPOINTS = [
-  "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
-  "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
-];
+const GOOGLE_QUOTA_ENDPOINT =
+  "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary";
 
-async function discoverGoogleProjectId(
-  token: string, fetchImpl: typeof fetch,
-): Promise<string | undefined> {
-  const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
-  if (envProjectId) return envProjectId;
-
-  for (const endpoint of GOOGLE_LOAD_CODE_ASSIST_ENDPOINTS) {
-    // A failure on one endpoint (network throw, non-OK, bad JSON) must fall
-    // through to the next mirror rather than aborting discovery entirely.
-    try {
-      const response = await fetchWithTimeout(fetchImpl, endpoint, {
-        method: "POST",
-        headers: googleHeaders(token),
-        body: JSON.stringify({ metadata: googleMetadata() }),
-      });
-      if (!response.ok) continue;
-      const data = await response.json();
-      if (typeof data?.cloudaicompanionProject === "string" && data.cloudaicompanionProject) {
-        return data.cloudaicompanionProject;
-      }
-      if (typeof data?.cloudaicompanionProject?.id === "string") return data.cloudaicompanionProject.id;
-    } catch {
-      continue;
-    }
-  }
-  return undefined;
-}
-
-async function requestCodex(token: string, fetchImpl: typeof fetch): Promise<Response> {
-  return fetchWithTimeout(fetchImpl, "https://chatgpt.com/backend-api/wham/usage", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-async function requestClaude(token: string, fetchImpl: typeof fetch): Promise<Response> {
-  return fetchWithTimeout(fetchImpl, "https://api.anthropic.com/api/oauth/usage", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "anthropic-beta": "oauth-2025-04-20",
+async function requestCodex(
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  return fetchWithTimeout(
+    fetchImpl,
+    "https://chatgpt.com/backend-api/wham/usage",
+    {
+      headers: { Authorization: `Bearer ${token}` },
     },
-  });
+  );
 }
 
-async function requestGrok(token: string, fetchImpl: typeof fetch): Promise<Response> {
-  return fetchWithTimeout(fetchImpl, "https://cli-chat-proxy.grok.com/v1/billing?format=credits", {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  });
+async function requestClaude(
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  return fetchWithTimeout(
+    fetchImpl,
+    "https://api.anthropic.com/api/oauth/usage",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-beta": "oauth-2025-04-20",
+      },
+    },
+  );
 }
 
-async function requestAntigravity(token: string, fetchImpl: typeof fetch): Promise<Response> {
-  const projectId = await discoverGoogleProjectId(token, fetchImpl);
-  if (!projectId) throw new Error("missing projectId (try /login again)");
+async function requestGrok(
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  return fetchWithTimeout(
+    fetchImpl,
+    "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
+    {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    },
+  );
+}
+
+async function requestAntigravity(
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
   return fetchWithTimeout(fetchImpl, GOOGLE_QUOTA_ENDPOINT, {
     method: "POST",
-    headers: googleHeaders(token, projectId),
-    body: JSON.stringify({ project: projectId }),
+    headers: googleHeaders(token),
+    body: "{}",
   });
 }
 
@@ -205,13 +199,15 @@ const PROVIDERS = [
     name: "grok",
     read: (nowMs: number) => readXaiCredential(undefined, nowMs),
     request: requestGrok,
-    parse: (payload: unknown, nowMs: number) => parseGrokBilling(payload, nowMs),
+    parse: (payload: unknown, nowMs: number) =>
+      parseGrokBilling(payload, nowMs),
   },
   {
     name: "claude",
     read: (nowMs: number) => readAnthropicCredential(undefined, nowMs),
     request: requestClaude,
-    parse: (payload: unknown, nowMs: number) => parseAnthropicUsage(payload, nowMs),
+    parse: (payload: unknown, nowMs: number) =>
+      parseAnthropicUsage(payload, nowMs),
   },
   {
     name: "codex",
@@ -223,7 +219,8 @@ const PROVIDERS = [
     name: "antigravity",
     read: (_nowMs: number) => readAntigravityCredential(),
     request: requestAntigravity,
-    parse: (payload: unknown) => parseGoogleQuota(payload),
+    parse: (payload: unknown, nowMs: number) =>
+      parseGoogleQuota(payload, nowMs),
   },
 ] as const;
 
@@ -250,7 +247,10 @@ async function fetchOne(
   } catch (error) {
     // Preserve the real reason (e.g. "missing projectId (try /login
     // again)") instead of flattening every failure into "unreachable".
-    return { name: provider.name, stale: error instanceof Error ? error.message : "unreachable" };
+    return {
+      name: provider.name,
+      stale: error instanceof Error ? error.message : "unreachable",
+    };
   }
 
   let body: unknown;
@@ -273,7 +273,8 @@ async function fetchOne(
 }
 
 export async function fetchAll(
-  nowMs = Date.now(), fetchImpl: typeof fetch = fetch,
+  nowMs = Date.now(),
+  fetchImpl: typeof fetch = fetch,
 ): Promise<ProviderStatus[]> {
   return Promise.all(PROVIDERS.map((p) => fetchOne(p, nowMs, fetchImpl)));
 }

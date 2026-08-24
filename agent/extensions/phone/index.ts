@@ -263,17 +263,34 @@ export default function (pi: PhonePi) {
                 const encrypted =
                     inner.getChild?.("encrypted", NS) ??
                     inner.getChild?.("encrypted");
-                if (!encrypted || !omemo) return;
-                void omemo
-                    .decrypt(from, encrypted as Parameters<Omemo["decrypt"]>[1])
-                    .then((body) => {
-                        if (body?.trim()) inject(body);
-                    })
-                    .catch((err: unknown) => {
-                        const msg =
-                            err instanceof Error ? err.message : String(err);
-                        ctx.ui.notify(`phone decrypt: ${msg}`, "error");
-                    });
+                const plain = inner.getChildText?.("body")?.trim();
+                if (encrypted && omemo) {
+                    void omemo
+                        .decrypt(
+                            from,
+                            encrypted as Parameters<Omemo["decrypt"]>[1],
+                        )
+                        .then((body) => {
+                            if (body?.trim()) inject(body);
+                            else if (plain && phoneCommand(plain))
+                                inject(plain);
+                        })
+                        .catch((err: unknown) => {
+                            if (plain && phoneCommand(plain)) inject(plain);
+                            else {
+                                const msg =
+                                    err instanceof Error
+                                        ? err.message
+                                        : String(err);
+                                ctx.ui.notify(
+                                    `phone decrypt: ${msg}`,
+                                    "error",
+                                );
+                            }
+                        });
+                    return;
+                }
+                if (plain && phoneCommand(plain)) inject(plain);
             },
         );
 

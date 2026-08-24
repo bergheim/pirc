@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   barColor,
+  contextColor,
+  contextTone,
   cacheRemainingSeconds,
   cells,
   cacheTone,
@@ -32,6 +34,7 @@ const sample: CurrentSession = {
   branch: "master",
   dirty: true,
   percent: 42,
+  tokens: 120000,
   contextWindow: 200000,
   cost: 1.23,
   cacheRemainingSeconds: null,
@@ -74,12 +77,24 @@ test("formatK", () => {
   assert.equal(formatK(Number.NaN), "0");
 });
 
-test("barColor thresholds match Claude", () => {
-  assert.equal(barColor(0), "green");
-  assert.equal(barColor(69.9), "green");
+test("barColor is quiet until 70/90", () => {
+  assert.equal(barColor(0), null);
+  assert.equal(barColor(69.9), null);
   assert.equal(barColor(70), "yellow");
   assert.equal(barColor(89.9), "yellow");
   assert.equal(barColor(90), "red");
+});
+
+test("contextColor is yellow at 200k, red at 500k", () => {
+  assert.equal(contextColor(111_000), null);
+  assert.equal(contextColor(199_999), null);
+  assert.equal(contextColor(200_000), "yellow");
+  assert.equal(contextColor(499_999), "yellow");
+  assert.equal(contextColor(500_000), "red");
+  assert.equal(contextTone(111_000), null);
+  assert.equal(contextTone(200_000), TONE.yellow);
+  assert.equal(contextTone(500_000), TONE.red);
+  assert.equal(contextTone(null), "dim");
 });
 
 test("renderBar width", () => {
@@ -101,7 +116,7 @@ test("current line includes modern session context", () => {
   assert.ok(plains.includes("󰔛 medium"));
   assert.ok(plains.includes(" jolo"));
   assert.ok(plains.includes(" master ●"));
-  assert.ok(plains.includes("󰍛 ctx 42%/200k"));
+  assert.ok(plains.includes("󰍛 ctx 42% 120k/500k"));
   assert.ok(plains.includes("󰔚 $1.23"));
 });
 

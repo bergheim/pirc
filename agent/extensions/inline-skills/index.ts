@@ -198,7 +198,6 @@ export default function (pi: ExtensionAPI): void {
 	});
 
 	pi.on("input", (event) => {
-		if (event.source === "extension") return;
 		if (!event.text.includes("$")) return;
 		refresh();
 		const expanded = expandSkillHits(event.text, skills);

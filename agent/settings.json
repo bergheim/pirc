@@ -1,48 +1,48 @@
 {
-    "lastChangelogVersion": "0.84.2",
-    "theme": "crew-catppuccin-latte",
-    "defaultProvider": "xai",
-    "defaultModel": "grok-4.6",
-    "enabledModels": [
-        "xai/grok-4.6",
-        "claude-bridge/claude-fable-5",
-        "openai-codex/gpt-5.6-sol",
-        "claude-bridge/claude-opus-5",
-        "openai-codex/gpt-5.6-terra",
-        "agy/gemini-3.7-flash"
-    ],
-    "npmCommand": [
-        "pnpm",
-        "--config.node-linker=hoisted",
-        "--config.strict-dep-builds=false",
-        "--config.auto-install-peers=false",
-        "--config.strict-peer-dependencies=false"
-    ],
-    "packages": [
-        "npm:pi-downshift",
-        "npm:@juicesharp/rpiv-advisor",
-        "npm:pi-themes",
-        "npm:pi-web-access",
-        "npm:pi-vim",
-        "npm:@juicesharp/rpiv-ask-user-question",
-        {
-            "source": "npm:pi-lens",
-            "skills": []
-        },
-        "npm:pi-system-prompt",
-        "npm:pi-claude-bridge",
-        "git:github.com/earendil-works/pi-review",
-        "git:github.com/earendil-works/pi-review-loop",
-        {
-            "source": "git:github.com/DietrichGebert/ponytail",
-            "skills": []
-        }
-    ],
-    "hideThinkingBlock": false,
-    "defaultThinkingLevel": "medium",
-    "compactToolsDensity": "title",
-    "externalEditor": "emacsclient -t",
-    "showCacheMissNotices": true,
-    "enableInstallTelemetry": false,
-    "treeFilterMode": "user-only"
+  "lastChangelogVersion": "0.84.3",
+  "theme": "crew-catppuccin-latte",
+  "defaultProvider": "xai",
+  "defaultModel": "grok-4.6",
+  "enabledModels": [
+    "xai/grok-4.6",
+    "claude-bridge/claude-fable-5",
+    "openai-codex/gpt-5.6-sol",
+    "claude-bridge/claude-opus-5",
+    "openai-codex/gpt-5.6-terra",
+    "agy/gemini-3.7-flash"
+  ],
+  "npmCommand": [
+    "pnpm",
+    "--config.node-linker=hoisted",
+    "--config.strict-dep-builds=false",
+    "--config.strict-peer-dependencies=false"
+  ],
+  "packages": [
+    "npm:pi-downshift",
+    "npm:@juicesharp/rpiv-advisor",
+    "npm:pi-themes",
+    "npm:pi-web-access",
+    "npm:pi-vim",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    {
+      "source": "npm:pi-lens",
+      "skills": []
+    },
+    "npm:pi-system-prompt",
+    "npm:pi-claude-bridge",
+    "git:github.com/earendil-works/pi-review",
+    "git:github.com/earendil-works/pi-review-loop",
+    {
+      "source": "git:github.com/DietrichGebert/ponytail",
+      "skills": []
+    },
+    "git:github.com/bergheim/pi-xmpp"
+  ],
+  "hideThinkingBlock": false,
+  "defaultThinkingLevel": "medium",
+  "compactToolsDensity": "title",
+  "externalEditor": "emacsclient -t",
+  "enableInstallTelemetry": false,
+  "showCacheMissNotices": true,
+  "treeFilterMode": "user-only"
 }

@@ -101,6 +101,7 @@ export default function (pi: PhonePi) {
     let allow = DEFAULT_ALLOW;
     let lastFromPhone: string | undefined;
     let injectTail: Promise<void> = Promise.resolve();
+    let runId = 0;
 
     async function sendState(
         to: string | undefined,
@@ -134,6 +135,7 @@ export default function (pi: PhonePi) {
     }
 
     async function stop(): Promise<void> {
+        runId++;
         const conn = xmpp;
         xmpp = undefined;
         omemo = undefined;
@@ -283,6 +285,7 @@ export default function (pi: PhonePi) {
                     ctx.ui.notify("phone off", "info");
                 };
                 const inject = (body: string) => {
+                    if (!xmpp) return;
                     const cmd = phoneCommand(body);
                     if (cmd) {
                         void runCommand(cmd).catch((err: unknown) => {
@@ -302,8 +305,10 @@ export default function (pi: PhonePi) {
                           )
                         : body;
                     lastFromPhone = text;
+                    const id = runId;
                     injectTail = injectTail
                         .then(async () => {
+                            if (id !== runId || !xmpp) return;
                             if (!ctx.isIdle()) {
                                 ctx.abort();
                                 const t0 = Date.now();
@@ -315,7 +320,9 @@ export default function (pi: PhonePi) {
                                     await new Promise((r) => setTimeout(r, 50));
                                 }
                             }
+                            if (id !== runId || !xmpp) return;
                             await sendState(from, "composing");
+                            if (id !== runId || !xmpp) return;
                             pi.sendUserMessage(text);
                         })
                         .catch((err: unknown) => {

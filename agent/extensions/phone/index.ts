@@ -19,6 +19,7 @@ import {
     userText,
     type ChatState,
 } from "./lib.ts";
+import { expandSkillHits, loadSkills } from "../inline-skills/index.ts";
 import { NS, Omemo, type XmppIq } from "./omemo.ts";
 
 // @xmpp/client 0.13 picks SCRAM-SHA-1 first; this ejabberd rejects the response.
@@ -165,8 +166,7 @@ export default function (pi: PhonePi) {
         }
         const username = jid.slice(0, at);
         const domain = jid.slice(at + 1);
-        const service =
-            process.env.PI_XMPP_SERVICE ?? `xmpps://${domain}:5223`;
+        const service = process.env.PI_XMPP_SERVICE ?? `xmpps://${domain}:5223`;
 
         const conn = client({
             service,
@@ -304,7 +304,13 @@ export default function (pi: PhonePi) {
                         return;
                     }
                     peer = from;
-                    lastFromPhone = body;
+                    const text = body.includes("$")
+                        ? expandSkillHits(
+                              body,
+                              loadSkills(pi.getCommands() as never),
+                          )
+                        : body;
+                    lastFromPhone = text;
                     injectTail = injectTail
                         .then(async () => {
                             if (!ctx.isIdle()) {
@@ -319,7 +325,7 @@ export default function (pi: PhonePi) {
                                 }
                             }
                             await sendState(from, "composing");
-                            pi.sendUserMessage(body);
+                            pi.sendUserMessage(text);
                         })
                         .catch((err: unknown) => {
                             const msg =

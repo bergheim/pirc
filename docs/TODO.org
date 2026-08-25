@@ -34,3 +34,18 @@ CLOSED: [2026-08-24 Mon 13:35]
   libomemo.js + PEP. Identity in ~/.pi/agent/phone-omemo.json. No plaintext send.
 :END:
 Conversations-compatible eu.siacs.conversations.axolotl. Persist identity. Refuse plaintext send. Spike libomemo.js before wiring.
+
+* DONE Replace jolo AGENTS scaffold with Pi-setup context           :pi:docs:
+CLOSED: [2026-08-25 Tue 12:11]
+:PROPERTIES:
+:ID:       20260825T121053Z-c11d0a
+:CREATED:  [2026-08-25 Tue 12:10]
+:LAST_AGENT: unknown
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-25 Tue 12:11] \\
+  PROJECT.org + AGENTS.md + slim agent-ops. CLAUDE/GEMINI wrappers.
+- Session unknown [2026-08-25 Tue 12:11]
+- Session unknown [2026-08-25 Tue 12:10]
+:END:
+Write docs/PROJECT.org. Replace root AGENTS.md (this is live ~/.pi, not an app). Slim docs/agent-ops.md to org/denote recipes. Commit CLAUDE.md and GEMINI.md as wrappers. Leave phone/settings/gitignore dirty work alone.

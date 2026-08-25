@@ -1,0 +1,48 @@
+#+title: pi config — project context
+#+startup: showall
+
+* Purpose
+
+The best personal [[https://github.com/badlogic/pi-mono][Pi]] setup for one operator. This checkout *is* the live bind-mounted =~/.pi=: settings, packages, themes, keybindings, extensions, and the global =agent/AGENTS.md=. It is not an application.
+
+* Audience
+
+You, plus coding agents running in this same bind-mount (jolo devcontainer or host). Changes here are live on the next =/reload= or new session.
+
+* Constraints
+
+- Editor is Emacs (evil, elpaca, general.el) plus a vim-shaped Pi TUI (=pi-vim=, =pi-vim-jk=). =externalEditor= is =emacsclient -t=. Never propose VS Code, Copilot, or closed-source themes.
+- FOSS-first for packages, themes, and extensions. Paid frontier models are already in use (Grok, Codex, Claude Max) and are fine.
+- No backwards-compat shims. Ship the new shape; the operator edits by hand. See stash note =20260423T130003=.
+- Secrets stay gitignored: =agent/auth.json=, =trust.json=, =phone-omemo.json=, sessions, run-history.
+- This tree is the source of truth (stash note =20260728T154136=). Do not invent a second copy or a restore-from-stash path.
+- Do not worktree this repo. It is the live config; branch in place.
+
+* Key decisions
+
+- *Two AGENTS files.* =agent/AGENTS.md= is global (every project): Crawl4AI over =fetch_content=, skip-permissions for headless subagents. Root =AGENTS.md= is this repo only.
+- *Theme and TUI.* Crew Catppuccin (latte/mocha toggle), compact-tools title density, thinking hidden, two-line usage footer in =agent/extensions/usage/=. Do not add a second =setFooter= package.
+- *Packages.* Installed set lives in =agent/settings.json=. Prefer maintained first-party or FOSS packages over wrapping the same idea again.
+- *Delegation.* =worker= (local Qwen) for mechanical edits; =codex= / =claude= / =agy= for real work; advisor at xhigh. See =agent/delegation.md=.
+- *Phone.* XMPP sidecar + OMEMO in =agent/extensions/phone/=. Identity is local and gitignored.
+
+* Layout
+
+#+begin_example
+agent/AGENTS.md           global instructions (every project)
+agent/settings.json       packages, theme, model defaults
+agent/keybindings.json
+agent/models.json
+agent/delegation.md       subagent routing
+agent/agents/             worker, codex, claude, agy
+agent/extensions/         first-party extensions (phone, vim-jk, usage, …)
+agent/themes/             crew-* themes
+docs/PROJECT.org          this file
+docs/TODO.org             work log
+docs/agent-ops.md         org/denote recipes
+#+end_example
+
+* Known gaps
+
+- Jolo still drops app-scaffold files into this tree (=MOTD=, =perf-rig.toml=, =justfile=, universal =.gitignore= blob, =scripts/test-gate=). Do not commit them unless they become a real Pi-config menu.
+- Working =agent/settings.json= can be rewritten by Pi and drop keys that live on =main= (=enabledModels=, =externalEditor=, telemetry flags). Treat =HEAD= as the last agreed config if the working copy looks stripped.

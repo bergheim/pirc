@@ -19,7 +19,7 @@ CLOSED: [2026-08-24 Mon 12:45]
 :END:
 :LOGBOOK:
 - State "DONE"       from "INPROGRESS" [2026-08-24 Mon 12:45] \\
-  Extension at agent/extensions/phone. Host still registers pi@.
+  Installed as git:github.com/bergheim/pi-xmpp. Host still registers pi@.
 :END:
 Relay this TUI session to tsb@xmpp.glvortex.net via pi@. /phone on, /phone off. Creds from env, password prompt if unset.
 

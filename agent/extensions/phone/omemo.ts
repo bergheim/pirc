@@ -286,8 +286,15 @@ export class Omemo {
                 .getChildren("device")
                 .map((d) => Number(d.attrs.id))
                 .filter((n) => Number.isFinite(n) && n > 0);
-        } catch {
-            return [];
+        } catch (err: unknown) {
+            const cond =
+                err &&
+                typeof err === "object" &&
+                "condition" in err
+                    ? String((err as { condition: unknown }).condition)
+                    : "";
+            if (cond === "item-not-found") return [];
+            throw err;
         }
     }
 

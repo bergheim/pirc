@@ -32,5 +32,6 @@
   ],
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
-  "compactToolsDensity": "title"
+  "compactToolsDensity": "full",
+  "externalEditor": "emacsclient -t"
 }

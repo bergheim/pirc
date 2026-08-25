@@ -3,6 +3,8 @@ agent/auth.json
 agent/models-store.json
 agent/trust.json
 agent/run-history.jsonl
+agent/phone-omemo.json
+agent/phone-in.log
 
 # runtime / caches
 logs/

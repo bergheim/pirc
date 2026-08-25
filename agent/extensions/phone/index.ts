@@ -1,7 +1,6 @@
 /// <reference types="node" />
 /// <reference path="./xmpp.d.ts" />
 import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -261,14 +260,6 @@ export default function (pi: PhonePi) {
                     self: jid,
                 });
                 if (!from || !allowedFrom(from, allow)) return;
-                try {
-                    appendFileSync(
-                        join(homedir(), ".pi", "agent", "phone-in.log"),
-                        `${new Date().toISOString()} ${stanza.toString?.() ?? ""}\n`,
-                    );
-                } catch {
-                    /* ignore */
-                }
                 const runCommand = async (
                     cmd: NonNullable<ReturnType<typeof phoneCommand>>,
                 ): Promise<void> => {

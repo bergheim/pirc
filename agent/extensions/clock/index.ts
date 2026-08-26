@@ -1,14 +1,27 @@
 /**
  * Dim right-aligned HH:mm:ss after each TUI user/assistant message.
+ * After the run settles, a second line shows wall time (tools + retries).
  * Custom entries stay out of model context. Reload keeps them.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { formatDuration } from "./format.ts";
 
 const TYPE = "clock";
 
 interface ClockData {
-    t: number;
+    t?: number;
+    d?: number;
+}
+
+function stampText(data: ClockData | undefined): string {
+    const parts: string[] = [];
+    if (Number.isFinite(data?.t)) parts.push(hhmmss(data.t as number));
+    if (Number.isFinite(data?.d)) {
+        const dur = formatDuration(data.d as number);
+        if (dur) parts.push(`took ${dur}`);
+    }
+    return parts.join(" · ");
 }
 
 function hhmmss(t: number): string {
@@ -21,10 +34,12 @@ function hhmmss(t: number): string {
 }
 
 export default function (pi: ExtensionAPI): void {
+    let runStart: number | undefined;
+
     pi.registerEntryRenderer<ClockData>(TYPE, (entry, _opts, theme) => {
-        const t = entry.data?.t;
-        if (!Number.isFinite(t)) return undefined;
-        const text = theme.fg("dim", hhmmss(t));
+        const raw = stampText(entry.data);
+        if (!raw) return undefined;
+        const text = theme.fg("dim", raw);
         return {
             render(width: number) {
                 return [
@@ -35,6 +50,17 @@ export default function (pi: ExtensionAPI): void {
         };
     });
 
+    const reset = () => {
+        runStart = undefined;
+    };
+
+    pi.on("session_start", reset);
+    pi.on("session_shutdown", reset);
+
+    pi.on("agent_start", (_event, ctx) => {
+        if (ctx.mode === "tui") runStart ??= performance.now();
+    });
+
     pi.on("message_end", (event, ctx) => {
         if (ctx.mode !== "tui") return;
         const { role, timestamp: t } = event.message;
@@ -42,5 +68,12 @@ export default function (pi: ExtensionAPI): void {
         if (!Number.isFinite(t)) return;
         // message is persisted after this handler; append now and the clock sits above it
         setTimeout(() => pi.appendEntry<ClockData>(TYPE, { t }), 0);
+    });
+
+    pi.on("agent_settled", (_event, ctx) => {
+        const startedAt = runStart;
+        runStart = undefined;
+        if (ctx.mode !== "tui" || startedAt === undefined) return;
+        pi.appendEntry<ClockData>(TYPE, { d: performance.now() - startedAt });
     });
 }

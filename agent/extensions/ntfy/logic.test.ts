@@ -24,6 +24,8 @@ test("formatElapsed buckets", () => {
 
 test("parseThreshold defaults and rejects junk", () => {
     assert.equal(parseThreshold(undefined), 60);
+    assert.equal(parseThreshold(""), 60);
+    assert.equal(parseThreshold("  "), 60);
     assert.equal(parseThreshold("20"), 20);
     assert.equal(parseThreshold("0"), 0);
     assert.equal(parseThreshold("nope"), 60);

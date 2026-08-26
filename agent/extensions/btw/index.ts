@@ -2,7 +2,7 @@
  * /btw <question> — one-shot side answer. Stays out of the main model context.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { Box, Text } from "@earendil-works/pi-tui";
 import {
     buildConversationContext,
     buildSideMessages,
@@ -31,19 +31,18 @@ export default function (pi: ExtensionAPI): void {
         const q = entry.data?.q?.trim();
         const a = entry.data?.a?.trim();
         if (!q && !a) return undefined;
-        return {
-            render(width: number) {
-                const lines = [theme.fg("accent", theme.bold("btw"))];
-                if (q) lines.push(...wrapTextWithAnsi(theme.fg("dim", q), width));
-                if (a) lines.push(...wrapTextWithAnsi(a, width));
-                return lines;
-            },
-            invalidate() {},
-        };
+        const box = new Box(0, 0, (s) => theme.bg("userMessageBg", s));
+        box.addChild(
+            new Text(theme.fg("customMessageLabel", theme.bold("btw"))),
+        );
+        if (q) box.addChild(new Text(theme.fg("customMessageText", q)));
+        if (a) box.addChild(new Text(theme.fg("userMessageText", a)));
+        return box;
     });
 
     pi.registerCommand("btw", {
-        description: "Ask a side question without adding it to the main conversation",
+        description:
+            "Ask a side question without adding it to the main conversation",
         handler: async (args, ctx) => {
             const question = args.trim();
             if (!question) {
@@ -78,29 +77,42 @@ export default function (pi: ExtensionAPI): void {
                             systemPrompt: sideSystemPrompt(),
                             messages: buildSideMessages(
                                 question,
-                                buildConversationContext(ctx.sessionManager.getBranch()),
+                                buildConversationContext(
+                                    ctx.sessionManager.getBranch(),
+                                ),
                             ),
                         },
                         {
                             apiKey: auth.apiKey,
                             headers: auth.headers,
                             env: auth.env,
-                            reasoning: ctx.thinkingLevel === "off" ? undefined : ctx.thinkingLevel,
+                            reasoning:
+                                ctx.thinkingLevel === "off"
+                                    ? undefined
+                                    : ctx.thinkingLevel,
                             cacheRetention: "none",
                             signal: ac.signal,
                         },
                     )
                     .result();
-                if (ac.signal.aborted || response.stopReason === "aborted") return;
+                if (ac.signal.aborted || response.stopReason === "aborted")
+                    return;
                 if (response.stopReason === "error") {
-                    ctx.ui.notify(response.errorMessage ?? "btw request failed", "error");
+                    ctx.ui.notify(
+                        response.errorMessage ?? "btw request failed",
+                        "error",
+                    );
                     return;
                 }
-                const answer = extractText(response.content) || "No response received.";
+                const answer =
+                    extractText(response.content) || "No response received.";
                 pi.appendEntry<BtwData>(TYPE, { q: question, a: answer });
             } catch (error) {
                 if (ac.signal.aborted) return;
-                ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+                ctx.ui.notify(
+                    error instanceof Error ? error.message : String(error),
+                    "error",
+                );
             } finally {
                 if (inflight === ac) {
                     inflight = undefined;

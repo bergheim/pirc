@@ -1,8 +1,8 @@
 /**
- * ntfy when a TUI turn is slow, or when the TUI session quits.
+ * TUI settle: CSI 5 t + BEL (WM urgent). ntfy if the turn is slow, or on quit.
  * Jolo: AGENT=pi notify. Host: POST $NTFY_SERVER / $PI_NTFY_TOPIC (default pi).
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -21,11 +21,15 @@ const hasNotify =
     spawnSync("sh", ["-c", "command -v notify"], { stdio: "ignore" }).status ===
     0;
 
-function runNotify(args: string[]): void {
-    spawnSync("notify", args, {
-        env: { ...process.env, AGENT: "pi" },
-        stdio: "ignore",
-        timeout: 8000,
+function runNotify(args: string[]): Promise<void> {
+    return new Promise((resolve) => {
+        const child = spawn("notify", args, {
+            env: { ...process.env, AGENT: "pi" },
+            stdio: "ignore",
+            timeout: 8000,
+        });
+        child.on("error", () => resolve());
+        child.on("close", () => resolve());
     });
 }
 
@@ -41,7 +45,6 @@ async function postHost(elapsedSec?: number): Promise<void> {
     const server = process.env.NTFY_SERVER;
     if (!server) return;
     const title = titleFor(basename(process.cwd()), elapsedSec);
-    if (process.stdout.isTTY) process.stdout.write("\x1b[5t\x07");
     try {
         await fetch(ntfyUrl(server, hostTopic(process.env.PI_NTFY_TOPIC)), {
             method: "POST",
@@ -68,7 +71,7 @@ export default function (pi: ExtensionAPI): void {
     pi.on("agent_start", () => {
         const next = onAgentStart(cycle, Date.now());
         cycle = next.cycle;
-        if (next.stamp && hasNotify) runNotify(["stamp"]);
+        if (next.stamp && hasNotify) void runNotify(["stamp"]);
     });
 
     pi.on("agent_settled", async () => {
@@ -77,8 +80,9 @@ export default function (pi: ExtensionAPI): void {
         const next = onSettled(cycle, Date.now(), threshold);
         cycle = next.cycle;
         if (!wasTui) return;
+        if (process.stdout.isTTY) process.stdout.write("\x1b[5t\x07");
         if (hasNotify) {
-            runNotify(["--if-slow", String(threshold)]);
+            void runNotify(["--if-slow", String(threshold)]);
             return;
         }
         if (next.notify) await postHost(next.elapsed);
@@ -88,7 +92,7 @@ export default function (pi: ExtensionAPI): void {
         const quit = onShutdown(cycle, event.reason);
         cycle = { tui: cycle.tui };
         if (!quit) return;
-        if (hasNotify) runNotify([]);
+        if (hasNotify) await runNotify([]);
         else await postHost();
     });
 }

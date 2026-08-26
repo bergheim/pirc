@@ -19,6 +19,7 @@ Local, under =agent/extensions/=. Packages live in =settings.json=, not here.
 - =compact-tools= — tool-call display density (ctrl+b)
 - =effort-alias= — =/effort= sets thinking level
 - =inline-skills= — expands =$skill= mentions in a normal prompt
+- =ntfy= — ntfy ping when a TUI turn is slow or the session quits
 - =materialize-package-skills= — copies package skills into the user skill dir (skips pi-lens)
 - =pi-official-subagent= — loads Pi's bundled subagent extension
 - =pi-vim-jk= — jk to NORMAL; edge j/k walks prompt history

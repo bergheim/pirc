@@ -12,7 +12,12 @@
 		"cyan": 6,
 		"gray": 8,
 		"black": 0,
-		"white": 7
+		"white": 7,
+		"brightYellow": 11,
+		"brightBlue": 12,
+		"brightMagenta": 13,
+		"brightCyan": 14,
+		"brightWhite": 15
 	},
 	"colors": {
 		"accent": "green",

@@ -32,9 +32,9 @@
 		"customMessageBg": 254,
 		"customMessageText": 0,
 		"customMessageLabel": "magenta",
-		"toolPendingBg": 254,
-		"toolSuccessBg": 254,
-		"toolErrorBg": 254,
+		"toolPendingBg": 0,
+		"toolSuccessBg": 0,
+		"toolErrorBg": 0,
 		"toolTitle": "cyan",
 		"toolOutput": "gray",
 

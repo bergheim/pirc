@@ -1,6 +1,7 @@
 /**
  * Copy package-shipped skills into ~/.pi/agent/skills/<name>/.
  * Packages keep extensions; they do not export skills (see settings.json).
+ * Skip packages that already inject skills via resources_discover (pi-lens).
  * Local skills (no .pi-materialized marker) are left alone.
  */
 
@@ -20,7 +21,10 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 
 const MARKER = ".pi-materialized";
 
-type PkgJson = { pi?: { skills?: string[] } };
+type PkgJson = { name?: string; pi?: { skills?: string[] } };
+
+// Extension already registers these; copying them collides.
+const SKIP_PACKAGES = new Set(["pi-lens"]);
 
 function isDir(path: string): boolean {
 	try {
@@ -46,6 +50,7 @@ function skillSourceDirs(pkgRoot: string): string[] {
 	let declared: string[] = [];
 	try {
 		const raw = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8")) as PkgJson;
+		if (raw.name && SKIP_PACKAGES.has(raw.name)) return [];
 		declared = raw.pi?.skills ?? [];
 	} catch {
 		declared = [];

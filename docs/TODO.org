@@ -49,3 +49,15 @@ CLOSED: [2026-08-25 Tue 12:11]
 - Session unknown [2026-08-25 Tue 12:10]
 :END:
 Write docs/PROJECT.org. Replace root AGENTS.md (this is live ~/.pi, not an app). Slim docs/agent-ops.md to org/denote recipes. Commit CLAUDE.md and GEMINI.md as wrappers. Leave phone/settings/gitignore dirty work alone.
+
+* DONE Add a short root README.org                                  :pi:docs:
+CLOSED: [2026-08-26 Wed 14:04]
+:PROPERTIES:
+:ID:       20260826T120434Z-de7532
+:CREATED:  [2026-08-26 Wed 14:04]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-26 Wed 14:04] \\
+  README.org is the front door; PROJECT.org stays the brief.
+:END:
+Front door for the live ~/.pi checkout. Point at PROJECT.org, TODO.org, AGENTS.md. Do not duplicate the project brief.

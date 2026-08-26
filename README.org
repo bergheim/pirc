@@ -1,0 +1,12 @@
+#+title: pirc — ~/.pi
+
+This checkout is my live Pi config: settings, packages, themes, keybindings, extensions, and global agent rules. It is not an app.
+
+* Start here
+
+- =docs/PROJECT.org= — context and decisions
+- =docs/TODO.org= — work log
+- =AGENTS.md= — rules for changing this repo
+- =agent/= — live Pi config
+
+Changes are live after =/reload= or a new session. Secrets, sessions, caches, and installed packages stay local and gitignored.

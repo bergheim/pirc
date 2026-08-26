@@ -97,3 +97,15 @@ CLOSED: [2026-08-26 Wed 21:30]
   tool*Bg 254 -> 0
 :END:
 toolPendingBg/toolSuccessBg/toolErrorBg are white (was 254). Set to ANSI 0.
+
+* DONE ANSI-16 dark theme for mosh                                   :pi:tui:
+CLOSED: [2026-08-26 Wed 21:35]
+:PROPERTIES:
+:ID:       20260826T193528Z-54c71e
+:CREATED:  [2026-08-26 Wed 21:35]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-26 Wed 21:35] \\
+  dark theme 16-color aliases; light 230 left dirty
+:END:
+Commit remaining bergheim-ansi-dark 16-color aliases (user/custom white/black, bright diffs). Leave light 230 unstaged.

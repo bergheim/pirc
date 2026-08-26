@@ -3,12 +3,16 @@
 	"name": "bergheim-ansi-dark",
 	"vars": {
 		"green": 2,
+		"brightGreen": 10,
 		"red": 1,
+		"brightRed": 9,
 		"yellow": 3,
 		"blue": 4,
 		"magenta": 5,
 		"cyan": 6,
-		"gray": 8
+		"gray": 8,
+		"black": 0,
+		"white": 7
 	},
 	"colors": {
 		"accent": "green",
@@ -27,10 +31,10 @@
 		"scrollbarThumb": "gray",
 		"searchMatchBg": "gray",
 		"searchMatchText": "",
-		"userMessageBg": 254,
-		"userMessageText": 0,
-		"customMessageBg": 254,
-		"customMessageText": 0,
+		"userMessageBg": "white",
+		"userMessageText": "black",
+		"customMessageBg": "white",
+		"customMessageText": "black",
 		"customMessageLabel": "magenta",
 		"toolPendingBg": 0,
 		"toolSuccessBg": 0,
@@ -49,8 +53,8 @@
 		"mdHr": "gray",
 		"mdListBullet": "blue",
 
-		"toolDiffAdded": "green",
-		"toolDiffRemoved": "red",
+		"toolDiffAdded": "brightGreen",
+		"toolDiffRemoved": "brightRed",
 		"toolDiffContext": "gray",
 
 		"syntaxComment": "gray",

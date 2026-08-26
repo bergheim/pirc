@@ -31,7 +31,7 @@ Keep this file short. Recipes live in `docs/agent-ops.md`.
 
 - `bergheim-ansi-light` / `bergheim-ansi-dark`: ANSI **0–15** or `""` (terminal default). Never 256-color (`16–255`), never hex, never truecolor.
 - Super+F1 (`toggle-darkmode`) retints Ghostty's 16-color palette. 256/truecolor **will not follow**. Do not claim they work on mosh, berghome, or remotely.
-- `tool*Bg` stays `""`. Dark `userMessageBg`/`customMessageBg` is `gray` (8). Never `7`/`white`/`254`/`230`.
+- `tool*Bg` stays `""`. Dark `userMessageBg`/`customMessageBg` is `black` (0). Never `7`/`white`/`8`/`254`/`230`.
 
 ## What to optimize for
 

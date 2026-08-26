@@ -1,5 +1,5 @@
 /**
- * ntfy when a TUI turn is slow, or when the TUI session quits.
+ * TUI settle: CSI 5 t + BEL (WM urgent). ntfy if the turn is slow, or on quit.
  * Jolo: AGENT=pi notify. Host: POST $NTFY_SERVER / $PI_NTFY_TOPIC (default pi).
  */
 import { spawnSync } from "node:child_process";
@@ -41,7 +41,6 @@ async function postHost(elapsedSec?: number): Promise<void> {
     const server = process.env.NTFY_SERVER;
     if (!server) return;
     const title = titleFor(basename(process.cwd()), elapsedSec);
-    if (process.stdout.isTTY) process.stdout.write("\x1b[5t\x07");
     try {
         await fetch(ntfyUrl(server, hostTopic(process.env.PI_NTFY_TOPIC)), {
             method: "POST",
@@ -77,6 +76,7 @@ export default function (pi: ExtensionAPI): void {
         const next = onSettled(cycle, Date.now(), threshold);
         cycle = next.cycle;
         if (!wasTui) return;
+        if (process.stdout.isTTY) process.stdout.write("\x1b[5t\x07");
         if (hasNotify) {
             runNotify(["--if-slow", String(threshold)]);
             return;

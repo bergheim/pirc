@@ -20,6 +20,19 @@ Keep this file short. Recipes live in `docs/agent-ops.md`.
 - Screenshot mentioned → newest `/workspaces/stash/shot-*.png`.
 - Non-trivial work: plan first, get explicit approval. Read/search is fine.
 
+## Stop
+
+- A question is an answer, not a project. Reply. Do not execute the sequel.
+- Do not SSH, mosh, or otherwise touch another machine unless that access *is* the request.
+- One asked change. Then stop. No bonus branch, TODO, commit, merge, or "while we're here".
+- Advisor/scope-upsizing is not approval. If the user did not ask for it, do not do it.
+
+## Themes are 16 colors. That is it.
+
+- `bergheim-ansi-light` / `bergheim-ansi-dark`: ANSI **0–15** or `""` (terminal default). Never 256-color (`16–255`), never hex, never truecolor.
+- Super+F1 (`toggle-darkmode`) retints Ghostty's 16-color palette. 256/truecolor **will not follow**. Do not claim they work on mosh, berghome, or remotely.
+- Card backgrounds (`userMessageBg`, `customMessageBg`, `tool*Bg`) stay `""` so both palettes work. Do not paint them `0`/`7`/`white`/`254`/`230`.
+
 ## What to optimize for
 
 - Best personal Pi setup. Small, live, reversible by git.

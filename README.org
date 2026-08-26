@@ -9,4 +9,20 @@ This checkout is my live Pi config: settings, packages, themes, keybindings, ext
 - =AGENTS.md= — rules for changing this repo
 - =agent/= — live Pi config
 
+* Extensions
+
+Local, under =agent/extensions/=. Packages live in =settings.json=, not here.
+
+- =agy-provider= — routes Gemini through the local Antigravity CLI
+- =clear-alias= — =/clear= starts a new session
+- =clock= — timestamps after user and assistant messages
+- =compact-tools= — tool-call display density (ctrl+b)
+- =effort-alias= — =/effort= sets thinking level
+- =inline-skills= — expands =$skill= mentions in a normal prompt
+- =materialize-package-skills= — copies package skills into the user skill dir (skips pi-lens)
+- =pi-official-subagent= — loads Pi's bundled subagent extension
+- =pi-vim-jk= — jk to NORMAL; edge j/k walks prompt history
+- =theme-toggle= — alt+shift+d flips latte/mocha
+- =usage= — two-line usage and cost footer
+
 Changes are live after =/reload= or a new session. Secrets, sessions, caches, and installed packages stay local and gitignored.

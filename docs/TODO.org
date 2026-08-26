@@ -61,3 +61,15 @@ CLOSED: [2026-08-26 Wed 14:04]
   README.org is the front door; PROJECT.org stays the brief.
 :END:
 Front door for the live ~/.pi checkout. Point at PROJECT.org, TODO.org, AGENTS.md. Do not duplicate the project brief.
+
+* DONE List local extensions in README.org                          :pi:docs:
+CLOSED: [2026-08-26 Wed 14:15]
+:PROPERTIES:
+:ID:       20260826T121550Z-bd94df
+:CREATED:  [2026-08-26 Wed 14:15]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-26 Wed 14:15] \\
+  README.org lists local agent/extensions, not packages.
+:END:
+One line each under agent/extensions/. Not packages. Skip caveman-native.js.

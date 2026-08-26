@@ -2,10 +2,11 @@
  * ntfy when a TUI turn is slow, or when the TUI session quits.
  * Jolo: AGENT=pi notify. Host: POST $NTFY_SERVER / $PI_NTFY_TOPIC (default pi).
  */
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+    type Cycle,
     hostTopic,
     ntfyUrl,
     onAgentStart,
@@ -14,19 +15,18 @@ import {
     onShutdown,
     parseThreshold,
     titleFor,
-    type Cycle,
 } from "./logic.ts";
 
 const hasNotify =
-    spawnSync("sh", ["-c", "command -v notify"], { stdio: "ignore" })
-        .status === 0;
+    spawnSync("sh", ["-c", "command -v notify"], { stdio: "ignore" }).status ===
+    0;
 
 function runNotify(args: string[]): void {
-    spawn("notify", args, {
+    spawnSync("notify", args, {
         env: { ...process.env, AGENT: "pi" },
         stdio: "ignore",
-        detached: true,
-    }).unref();
+        timeout: 8000,
+    });
 }
 
 function gitSubject(): string {
@@ -37,21 +37,25 @@ function gitSubject(): string {
     return result.status === 0 ? result.stdout.trim() : "";
 }
 
-function postHost(elapsedSec?: number): void {
+async function postHost(elapsedSec?: number): Promise<void> {
     const server = process.env.NTFY_SERVER;
     if (!server) return;
     const title = titleFor(basename(process.cwd()), elapsedSec);
     if (process.stdout.isTTY) process.stdout.write("\x1b[5t\x07");
-    void fetch(ntfyUrl(server, hostTopic(process.env.PI_NTFY_TOPIC)), {
-        method: "POST",
-        headers: {
-            Title: title,
-            Priority: "default",
-            Tags: "robot,checkmark",
-        },
-        body: gitSubject(),
-        signal: AbortSignal.timeout(5000),
-    }).catch(() => {});
+    try {
+        await fetch(ntfyUrl(server, hostTopic(process.env.PI_NTFY_TOPIC)), {
+            method: "POST",
+            headers: {
+                Title: title,
+                Priority: "default",
+                Tags: "robot,checkmark",
+            },
+            body: gitSubject(),
+            signal: AbortSignal.timeout(5000),
+        });
+    } catch {
+        // ntfy is best-effort
+    }
 }
 
 export default function (pi: ExtensionAPI): void {
@@ -67,7 +71,7 @@ export default function (pi: ExtensionAPI): void {
         if (next.stamp && hasNotify) runNotify(["stamp"]);
     });
 
-    pi.on("agent_settled", () => {
+    pi.on("agent_settled", async () => {
         const threshold = parseThreshold(process.env.PI_NTFY_THRESHOLD);
         const wasTui = cycle.tui;
         const next = onSettled(cycle, Date.now(), threshold);
@@ -77,14 +81,14 @@ export default function (pi: ExtensionAPI): void {
             runNotify(["--if-slow", String(threshold)]);
             return;
         }
-        if (next.notify) postHost(next.elapsed);
+        if (next.notify) await postHost(next.elapsed);
     });
 
-    pi.on("session_shutdown", (event) => {
+    pi.on("session_shutdown", async (event) => {
         const quit = onShutdown(cycle, event.reason);
         cycle = { tui: cycle.tui };
         if (!quit) return;
         if (hasNotify) runNotify([]);
-        else postHost();
+        else await postHost();
     });
 }

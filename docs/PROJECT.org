@@ -46,3 +46,4 @@ docs/agent-ops.md         org/denote recipes
 
 - Jolo still drops app-scaffold files into this tree (=MOTD=, =perf-rig.toml=, =justfile=, universal =.gitignore= blob, =scripts/test-gate=). Do not commit them unless they become a real Pi-config menu.
 - Working =agent/settings.json= can be rewritten by Pi and drop keys that live on =main= (=enabledModels=, =externalEditor=, telemetry flags). Treat =HEAD= as the last agreed config if the working copy looks stripped.
+- Pi (and =compact-tools=) serialize =settings.json= with =JSON.stringify(..., null, 2)=. That fights root =biome.json= 4-space. Formatter is disabled for that file only; do not biome-format it back to 4-space.

@@ -3,5 +3,11 @@
     "formatter": {
         "indentStyle": "space",
         "indentWidth": 4
-    }
+    },
+    "overrides": [
+        {
+            "includes": ["agent/settings.json"],
+            "formatter": { "enabled": false }
+        }
+    ]
 }

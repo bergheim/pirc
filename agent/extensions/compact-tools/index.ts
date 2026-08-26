@@ -298,7 +298,7 @@ export default function (pi: ExtensionAPI) {
 		label: "bash",
 		description: "Execute a bash command in the current working directory.",
 		parameters: createBashTool(process.cwd()).parameters,
-		promptSnippet: "Execute bash commands (ls, grep, find, etc.)",
+		promptSnippet: "Execute bash commands (ls, rg, fd, etc.)",
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return createBashTool(cwdOf(ctx)).execute(
@@ -433,7 +433,7 @@ export default function (pi: ExtensionAPI) {
 		label: "grep",
 		description: "Search file contents for patterns.",
 		parameters: createGrepTool(process.cwd()).parameters,
-		promptSnippet: "Search file contents for patterns (respects .gitignore)",
+		promptSnippet: "Search file contents with ripgrep (respects .gitignore)",
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return createGrepTool(cwdOf(ctx)).execute(
@@ -501,7 +501,7 @@ export default function (pi: ExtensionAPI) {
 		label: "find",
 		description: "Find files by glob pattern.",
 		parameters: createFindTool(process.cwd()).parameters,
-		promptSnippet: "Find files by glob pattern (respects .gitignore)",
+		promptSnippet: "Find files with fd by glob pattern (respects .gitignore)",
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return createFindTool(cwdOf(ctx)).execute(

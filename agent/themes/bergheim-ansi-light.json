@@ -8,7 +8,8 @@
 		"blue": 4,
 		"magenta": 5,
 		"cyan": 6,
-		"gray": 8
+		"gray": 8,
+		"black": 0
 	},
 	"colors": {
 		"accent": "green",
@@ -27,8 +28,8 @@
 		"scrollbarThumb": "gray",
 		"searchMatchBg": "gray",
 		"searchMatchText": "",
-		"userMessageBg": 2,
-		"userMessageText": 0,
+		"userMessageBg": "green",
+		"userMessageText": "black",
 		"customMessageBg": "",
 		"customMessageText": "",
 		"customMessageLabel": "magenta",

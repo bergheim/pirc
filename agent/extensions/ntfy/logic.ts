@@ -18,7 +18,9 @@ export function formatElapsed(seconds: number): string {
 }
 
 export function parseThreshold(raw: string | undefined): number {
-    const n = Number(raw);
+    const s = raw?.trim();
+    if (!s) return 60;
+    const n = Number(s);
     return Number.isFinite(n) && n >= 0 ? n : 60;
 }
 

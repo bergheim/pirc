@@ -22,7 +22,7 @@ You, plus coding agents running in this same bind-mount (jolo devcontainer or ho
 
 - *Two AGENTS files.* =agent/AGENTS.md= is global (every project): Crawl4AI over =fetch_content=, skip-permissions for headless subagents. Root =AGENTS.md= is this repo only.
 - *Git.* Feature branch, rebase onto =origin/main=, land with =merge --no-ff=. No fast-forward onto =main=. Commit and push in the same turn; do not leave this tree dirty.
-- *Theme and TUI.* Crew Catppuccin (latte/mocha toggle), compact-tools title density, thinking hidden, two-line usage footer in =agent/extensions/usage/=. Do not add a second =setFooter= package.
+- *Theme and TUI.* =bergheim-ansi-light/dark= only, ANSI 0-15 or terminal default. Super+F1 retints the Ghostty 16-color palette; 256/truecolor will not follow. Compact-tools title density, thinking hidden, two-line usage footer in =agent/extensions/usage/=. Do not add a second =setFooter= package.
 - *Packages.* Installed set lives in =agent/settings.json=. Prefer maintained first-party or FOSS packages over wrapping the same idea again.
 - *Delegation.* =worker= (local Qwen) for mechanical edits; =codex= / =claude= / =agy= for real work; advisor at xhigh. See =agent/delegation.md=.
 - *Phone.* XMPP sidecar + OMEMO in =agent/extensions/phone/=. Identity is local and gitignored.

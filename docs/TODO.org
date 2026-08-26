@@ -73,3 +73,15 @@ CLOSED: [2026-08-26 Wed 14:15]
   README.org lists local agent/extensions, not packages.
 :END:
 One line each under agent/extensions/. Not packages. Skip caveman-native.js.
+
+* DONE Add ntfy completion pings for Pi                             :pi:ntfy:
+CLOSED: [2026-08-26 Wed 21:03]
+:PROPERTIES:
+:ID:       20260826T190137Z-d3322c
+:CREATED:  [2026-08-26 Wed 21:01]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-26 Wed 21:03] \\
+  Host topic pi + Jolo notify reuse.
+:END:
+Host POSTs to topic pi. Jolo reuses notify. TUI only, --if-slow 60s, always on session end.

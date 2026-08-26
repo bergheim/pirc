@@ -11,6 +11,7 @@ Keep this file short. Recipes live in `docs/agent-ops.md`.
 - Do not create `docs/notes/` unless the discovery is repo-local (would matter after cloning this repo alone).
 - This tree is `~/.pi`. Branch in place. Do not create worktrees for this repo.
 - Treat `scratch/` as gitignored throwaway space.
+- First git move: `git status -sb` and `git branch --show-current`. If you are on a leftover `feat/*`/`fix/*` that is not this task, `git checkout main` and `git pull --ff-only`. Do not start work on the wrong branch.
 
 ## Communication and Planning
 
@@ -60,10 +61,12 @@ Use `bergheim/agent-org-set-state` for state changes; never hand-edit TODO keywo
 
 ## Git
 
-- Branch in this checkout: `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>`.
-- Linear history. Merge into `main`, not into other features. Multi-commit → merge commit; single commit → fast-forward.
+- Feature work on `feat/<slug>` / `fix/<slug>` / `docs/<slug>` / `chore/<slug>`, cut from up-to-date `main`. Never commit task work on `main`.
+- Finished work is committed **and pushed the same turn**. A dirty tree at the end of a task is a bug. Do not wait to be asked.
+- Land on `main` only as a **merge commit**: `git fetch origin && git rebase origin/main` on the feature branch, then `git checkout main && git merge --no-ff <branch> && git push origin main`. Always rebase onto the parent first. Always `--no-ff`. No fast-forward landings.
 - Never `git reset --hard`, `git checkout --`, or `git commit --no-verify` unless asked.
-- Do not commit secrets (`agent/auth.json`, `trust.json`, `phone-omemo.json`, sessions, run-history).
+- Do not commit secrets (`agent/auth.json`, `trust.json`, `phone-omemo.json`, sessions, run-history) or dumped prompts (`agent/SYSTEM.md`).
+- Pi rewrites `agent/settings.json` (2-space `JSON.stringify`). Do not commit that rewrite unless the keys/values are the change.
 
 ## Host and Container
 

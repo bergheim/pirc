@@ -85,3 +85,15 @@ CLOSED: [2026-08-26 Wed 21:03]
   Host topic pi + Jolo notify reuse.
 :END:
 Host POSTs to topic pi. Jolo reuses notify. TUI only, --if-slow 60s, always on session end.
+
+* DONE Dark-mode tool cards use beige ANSI white                     :pi:tui:
+CLOSED: [2026-08-26 Wed 21:30]
+:PROPERTIES:
+:ID:       20260826T193008Z-30461b
+:CREATED:  [2026-08-26 Wed 21:30]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-26 Wed 21:30] \\
+  tool*Bg 254 -> 0
+:END:
+toolPendingBg/toolSuccessBg/toolErrorBg are white (was 254). Set to ANSI 0.

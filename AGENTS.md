@@ -76,8 +76,8 @@ Use `bergheim/agent-org-set-state` for state changes; never hand-edit TODO keywo
 ## Git
 
 - Feature work on `feat/<slug>` / `fix/<slug>` / `docs/<slug>` / `chore/<slug>`, cut from up-to-date `main`. Never commit task work on `main`.
-- Finished work is committed **and pushed the same turn**. A dirty tree at the end of a task is a bug. Do not wait to be asked.
-- Land on `main` only as a **merge commit**: `git fetch origin && git rebase origin/main` on the feature branch, then `git checkout main && git merge --no-ff <branch> && git push origin main`. Always rebase onto the parent first. Always `--no-ff`. No fast-forward landings.
+- Finished work is committed **and pushed the same turn**.
+- Land: rebase onto `origin/main`. **One commit → fast-forward** (`git checkout main && git merge --ff-only <branch>`). **Several commits →** `merge --no-ff`. Do not `--no-ff` a single-commit branch.
 - Never `git reset --hard`, `git checkout --`, or `git commit --no-verify` unless asked.
 - Do not commit secrets (`agent/auth.json`, `trust.json`, `phone-omemo.json`, sessions, run-history) or dumped prompts (`agent/SYSTEM.md`).
 - Pi rewrites `agent/settings.json` (2-space `JSON.stringify`). Do not commit that rewrite unless the keys/values are the change.

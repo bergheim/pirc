@@ -44,5 +44,6 @@
   "externalEditor": "emacsclient -t",
   "enableInstallTelemetry": false,
   "showCacheMissNotices": true,
-  "treeFilterMode": "user-only"
+  "treeFilterMode": "user-only",
+  "quietStartup": true
 }

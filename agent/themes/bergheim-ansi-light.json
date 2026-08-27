@@ -39,7 +39,7 @@
         "userMessageBg": "green",
         "userMessageText": "black",
         "customMessageBg": "black",
-        "customMessageText": 0,
+        "customMessageText": "brightWhite",
         "customMessageLabel": "black",
         "toolPendingBg": "",
         "toolSuccessBg": "",

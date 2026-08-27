@@ -19,6 +19,7 @@ export type CurrentSession = {
     dirty: boolean;
     percent: number | null;
     tokens: number | null;
+    contextWindow: number | null;
     cost: number;
     cacheRemainingSeconds: number | null;
     cacheTtlSeconds: number | null;
@@ -41,13 +42,19 @@ export function barColor(usedPercent: number): "yellow" | "red" | null {
     return null;
 }
 
-export const CONTEXT_YELLOW = 200_000;
-export const CONTEXT_BUDGET = 500_000; // also the red cliff
-
-export function contextTone(tokens: number | null): string | null {
-    if (tokens === null) return "dim";
-    if (tokens >= CONTEXT_BUDGET) return TONE.red;
-    if (tokens >= CONTEXT_YELLOW) return TONE.yellow;
+export function contextTone(
+    tokens: number | null,
+    contextWindow: number | null,
+): string | null {
+    if (
+        tokens === null ||
+        contextWindow === null ||
+        !Number.isFinite(contextWindow) ||
+        contextWindow <= 0
+    )
+        return "dim";
+    if (tokens >= contextWindow) return TONE.red;
+    if (tokens >= contextWindow * 0.4) return TONE.yellow;
     return null;
 }
 
@@ -190,7 +197,8 @@ export function clip(s: string, width: number): string {
 export function formatK(n: number): string {
     if (!Number.isFinite(n) || n < 0) return "0";
     if (n < 1000) return String(Math.round(n));
-    return `${Math.round(n / 1000)}k`;
+    if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+    return `${Number((n / 1_000_000).toFixed(2))}m`;
 }
 
 type Segment = {
@@ -230,10 +238,12 @@ export function locationLineSegments(session: CurrentSession): Segment[] {
     const percentLabel =
         session.percent === null ? "?" : `${Math.round(session.percent)}`;
     const usedLabel = session.tokens === null ? "?" : formatK(session.tokens);
+    const budgetLabel =
+        session.contextWindow === null ? "?" : formatK(session.contextWindow);
     segs.push({
         key: "context",
-        plain: `󰍛 ctx ${percentLabel}% ${usedLabel}/${formatK(CONTEXT_BUDGET)}`,
-        tone: contextTone(session.tokens),
+        plain: `󰍛 ctx ${percentLabel}% ${usedLabel}/${budgetLabel}`,
+        tone: contextTone(session.tokens, session.contextWindow),
         keep: 100,
     });
     if (

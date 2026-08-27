@@ -49,6 +49,7 @@ const sample: CurrentSession = {
     dirty: true,
     percent: 42,
     tokens: 120000,
+    contextWindow: 500000,
     cost: 1.23,
     cacheRemainingSeconds: null,
     cacheTtlSeconds: null,
@@ -199,6 +200,7 @@ test("formatK", () => {
     assert.equal(formatK(42), "42");
     assert.equal(formatK(85400), "85k");
     assert.equal(formatK(200000), "200k");
+    assert.equal(formatK(1_050_000), "1.05m");
     assert.equal(formatK(Number.NaN), "0");
 });
 
@@ -210,13 +212,16 @@ test("barColor is quiet until 70/90", () => {
     assert.equal(barColor(90), "red");
 });
 
-test("contextTone is yellow at 200k, red at 500k", () => {
-    assert.equal(contextTone(111_000), null);
-    assert.equal(contextTone(199_999), null);
-    assert.equal(contextTone(200_000), TONE.yellow);
-    assert.equal(contextTone(499_999), TONE.yellow);
-    assert.equal(contextTone(500_000), TONE.red);
-    assert.equal(contextTone(null), "dim");
+test("contextTone scales at 40% and 100% of the model window", () => {
+    assert.equal(contextTone(199_999, 500_000), null);
+    assert.equal(contextTone(200_000, 500_000), TONE.yellow);
+    assert.equal(contextTone(499_999, 500_000), TONE.yellow);
+    assert.equal(contextTone(500_000, 500_000), TONE.red);
+    assert.equal(contextTone(419_999, 1_050_000), null);
+    assert.equal(contextTone(420_000, 1_050_000), TONE.yellow);
+    assert.equal(contextTone(1_050_000, 1_050_000), TONE.red);
+    assert.equal(contextTone(null, 500_000), "dim");
+    assert.equal(contextTone(120_000, null), "dim");
 });
 
 test("renderBar width", () => {
@@ -255,6 +260,23 @@ test("omits thinking when absent", () => {
 test("location line is worktree and branch", () => {
     const plains = locationLineSegments(sample).map((s) => s.plain);
     assert.deepEqual(plains, [" jolo", " master ●", "󰍛 ctx 42% 120k/500k"]);
+});
+
+test("location line uses the active model context window", () => {
+    const seg = locationLineSegments({
+        ...sample,
+        contextWindow: 1_050_000,
+    }).find((s) => s.key === "context")!;
+    assert.equal(seg.plain, "󰍛 ctx 42% 120k/1.05m");
+});
+
+test("location line dims an unknown context window", () => {
+    const seg = locationLineSegments({
+        ...sample,
+        contextWindow: null,
+    }).find((s) => s.key === "context")!;
+    assert.equal(seg.plain, "󰍛 ctx 42% 120k/?");
+    assert.equal(seg.tone, "dim");
 });
 
 test("location line puts cache after ctx", () => {

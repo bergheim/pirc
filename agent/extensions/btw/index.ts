@@ -3,12 +3,14 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Box, Text } from "@earendil-works/pi-tui";
+import { CLOCK_TYPE, type ClockData } from "../clock/entry.ts";
 import {
     buildConversationContext,
     buildSideMessages,
     extractText,
     sideSystemPrompt,
 } from "./context.ts";
+import { startBtwProgress } from "./progress.ts";
 
 const TYPE = "btw";
 
@@ -17,12 +19,19 @@ type BtwData = {
     a: string;
 };
 
+type Inflight = {
+    controller: AbortController;
+    stopProgress: () => void;
+};
+
 export default function (pi: ExtensionAPI): void {
-    let inflight: AbortController | undefined;
+    let inflight: Inflight | undefined;
 
     const abortInflight = () => {
-        inflight?.abort();
+        const current = inflight;
         inflight = undefined;
+        current?.controller.abort();
+        current?.stopProgress();
     };
 
     pi.on("session_shutdown", abortInflight);
@@ -33,7 +42,9 @@ export default function (pi: ExtensionAPI): void {
         if (!q && !a) return undefined;
         const box = new Box(0, 0, (s) => theme.bg("userMessageBg", s));
         box.addChild(
-            new Text(theme.fg("customMessageLabel", theme.bold("btw"))),
+            new Text(
+                theme.fg("customMessageLabel", theme.italic(theme.bold("btw"))),
+            ),
         );
         if (q) box.addChild(new Text(theme.fg("customMessageText", q)));
         if (a) box.addChild(new Text(theme.fg("userMessageText", a)));
@@ -67,8 +78,15 @@ export default function (pi: ExtensionAPI): void {
 
             abortInflight();
             const ac = new AbortController();
-            inflight = ac;
-            ctx.ui.setStatus("btw", "btw…");
+            const stopProgress = startBtwProgress((line) => {
+                ctx.ui.setWidget(
+                    "btw-progress",
+                    line === undefined ? undefined : [line],
+                );
+            });
+            const request: Inflight = { controller: ac, stopProgress };
+            inflight = request;
+            const startedAt = performance.now();
             try {
                 const response = await provider
                     .streamSimple(
@@ -107,6 +125,10 @@ export default function (pi: ExtensionAPI): void {
                 const answer =
                     extractText(response.content) || "No response received.";
                 pi.appendEntry<BtwData>(TYPE, { q: question, a: answer });
+                pi.appendEntry<ClockData>(CLOCK_TYPE, {
+                    t: Date.now(),
+                    d: performance.now() - startedAt,
+                });
             } catch (error) {
                 if (ac.signal.aborted) return;
                 ctx.ui.notify(
@@ -114,9 +136,9 @@ export default function (pi: ExtensionAPI): void {
                     "error",
                 );
             } finally {
-                if (inflight === ac) {
+                if (inflight === request) {
                     inflight = undefined;
-                    ctx.ui.setStatus("btw", undefined);
+                    stopProgress();
                 }
             }
         },

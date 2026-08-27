@@ -5,14 +5,8 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { CLOCK_TYPE, type ClockData } from "./entry.ts";
 import { formatDuration } from "./format.ts";
-
-const TYPE = "clock";
-
-interface ClockData {
-    t?: number;
-    d?: number;
-}
 
 function stampText(data: ClockData | undefined): string {
     const parts: string[] = [];
@@ -36,7 +30,7 @@ function hhmmss(t: number): string {
 export default function (pi: ExtensionAPI): void {
     let runStart: number | undefined;
 
-    pi.registerEntryRenderer<ClockData>(TYPE, (entry, _opts, theme) => {
+    pi.registerEntryRenderer<ClockData>(CLOCK_TYPE, (entry, _opts, theme) => {
         const raw = stampText(entry.data);
         if (!raw) return undefined;
         const text = theme.fg("dim", raw);
@@ -67,13 +61,13 @@ export default function (pi: ExtensionAPI): void {
         if (role !== "user" && role !== "assistant") return;
         if (!Number.isFinite(t)) return;
         // message is persisted after this handler; append now and the clock sits above it
-        setTimeout(() => pi.appendEntry<ClockData>(TYPE, { t }), 0);
+        setTimeout(() => pi.appendEntry<ClockData>(CLOCK_TYPE, { t }), 0);
     });
 
     pi.on("agent_settled", (_event, ctx) => {
         const startedAt = runStart;
         runStart = undefined;
         if (ctx.mode !== "tui" || startedAt === undefined) return;
-        pi.appendEntry<ClockData>(TYPE, { d: performance.now() - startedAt });
+        pi.appendEntry<ClockData>(CLOCK_TYPE, { d: performance.now() - startedAt });
     });
 }

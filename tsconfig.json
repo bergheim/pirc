@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "allowImportingTsExtensions": true,
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "noEmit": true,
+        "paths": {
+            "*": ["./agent/npm/node_modules/*"]
+        },
+        "skipLibCheck": true,
+        "target": "ES2022"
+    },
+    "include": ["agent/extensions/**/*.ts"]
+}

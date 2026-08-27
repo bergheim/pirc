@@ -60,12 +60,20 @@ export function quotaProvider(provider: string): string | null {
   return null;
 }
 
-function windowReset(seconds: number | null, nowMs: number): string {
+function windowReset(
+  seconds: number | null,
+  measuredAtMs: number,
+  nowMs: number,
+): string {
   if (seconds === null) return "";
-  return ` · ${formatResetWhen(seconds, nowMs)}`;
+  return ` · ${formatResetWhen(seconds, measuredAtMs, nowMs)}`;
 }
 
-function plainSegment(status: ProviderStatus, nowMs: number): string {
+function plainSegment(
+  status: ProviderStatus,
+  measuredAtMs: number,
+  nowMs: number,
+): string {
   const label = `${providerIcon(status.name)} ${status.name}`;
   if ("stale" in status) return `${label} —`;
   const {
@@ -75,20 +83,21 @@ function plainSegment(status: ProviderStatus, nowMs: number): string {
     weeklyResetsInSeconds,
   } = status.usage;
   if (weeklyOnly(status)) {
-    return `${label} ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds ?? resetsInSeconds, nowMs)}`;
+    return `${label} ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds ?? resetsInSeconds, measuredAtMs, nowMs)}`;
   }
   return (
-    `${label} ${Math.round(sessionPercent)}% 5h${windowReset(resetsInSeconds, nowMs)}` +
-    ` / ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds, nowMs)}`
+    `${label} ${Math.round(sessionPercent)}% 5h${windowReset(resetsInSeconds, measuredAtMs, nowMs)}` +
+    ` / ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds, measuredAtMs, nowMs)}`
   );
 }
 
 function footerLine(
   theme: Theme,
   status: ProviderStatus,
+  measuredAtMs: number,
   nowMs: number,
 ): string {
-  const segment = plainSegment(status, nowMs);
+  const segment = plainSegment(status, measuredAtMs, nowMs);
   if ("stale" in status) return theme.fg("dim", segment);
   const percent = weeklyOnly(status)
     ? status.usage.weeklyPercent
@@ -186,7 +195,8 @@ export function renderFooterLines(
   statuses: ProviderStatus[],
   width: number,
   currentProvider?: string,
-  nowMs = Date.now(),
+  measuredAtMs = Date.now(),
+  nowMs = measuredAtMs,
 ): string[] {
   const safeWidth = Math.max(0, width);
   const title = "󰐱 limits";
@@ -203,16 +213,18 @@ export function renderFooterLines(
     return [theme.fg("accent", theme.bold(clip(title, safeWidth)))];
 
   const sep = " · ";
-  const segment = plainSegment(status, nowMs);
+  const segment = plainSegment(status, measuredAtMs, nowMs);
   const full = `${title}${sep}${segment}`;
   if (cells(full) <= safeWidth) {
     return [
-      [theme.fg("accent", theme.bold(title)), footerLine(theme, status, nowMs)].join(
-        sep,
-      ),
+      [
+        theme.fg("accent", theme.bold(title)),
+        footerLine(theme, status, measuredAtMs, nowMs),
+      ].join(sep),
     ];
   }
-  if (cells(segment) <= safeWidth) return [footerLine(theme, status, nowMs)];
+  if (cells(segment) <= safeWidth)
+    return [footerLine(theme, status, measuredAtMs, nowMs)];
   return [clip(segment, safeWidth)];
 }
 
@@ -229,6 +241,7 @@ export default function (pi: ExtensionAPI) {
   // has to distinguish "not fetched yet" from "provider unreachable" beyond
   // this initial empty-array loading state.
   let statuses: ProviderStatus[] = [];
+  let measuredAtMs = Date.now();
   let requestRender: (() => void) | undefined;
   let ctxRef: ExtensionContext | undefined;
   let worktree = "";
@@ -257,7 +270,8 @@ export default function (pi: ExtensionAPI) {
   }
 
   async function refresh(): Promise<void> {
-    statuses = await fetchAll();
+    measuredAtMs = Date.now();
+    statuses = await fetchAll(measuredAtMs);
     requestRender?.();
   }
 
@@ -293,7 +307,14 @@ export default function (pi: ExtensionAPI) {
           return [
             "",
             renderCurrentLine(theme, current, width),
-            ...renderFooterLines(theme, statuses, width, current.provider),
+            ...renderFooterLines(
+              theme,
+              statuses,
+              width,
+              current.provider,
+              measuredAtMs,
+              Date.now(),
+            ),
           ];
         },
       };

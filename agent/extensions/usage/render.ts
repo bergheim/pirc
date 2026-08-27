@@ -94,9 +94,14 @@ export function formatLocalWhen(atMs: number, nowMs: number): string {
   return `${pad2(at.getDate())} ${MONTHS[at.getMonth()]} ${time}`;
 }
 
-export function formatResetWhen(seconds: number, nowMs: number): string {
+export function formatResetWhen(
+  seconds: number,
+  measuredAtMs: number,
+  nowMs = measuredAtMs,
+): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0s";
-  return `${formatLocalWhen(nowMs + seconds * 1000, nowMs)} (${formatDuration(seconds)})`;
+  const atMs = measuredAtMs + seconds * 1000;
+  return `${formatLocalWhen(atMs, nowMs)} (${formatDuration((atMs - nowMs) / 1000)})`;
 }
 
 // ccusage-style remaining: keep minutes on an hour so "2h 45m left" isn't flattened to "2h".

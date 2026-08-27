@@ -347,6 +347,7 @@ test("formatResetWhen is absolute (relative)", () => {
   const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
   assert.equal(formatResetWhen(7200, now), "14:07 (2h)");
   assert.equal(formatResetWhen(3 * 86400, now), "Thu 12:07 (3d)");
+  assert.equal(formatResetWhen(7200, now, now + 3600_000), "14:07 (1h)");
 });
 
 test("quotaProvider maps direct accounts only", () => {
@@ -389,6 +390,18 @@ test("footer is current model only, with reset", () => {
   assert.ok(claudeLine.includes(formatResetWhen(7200, now)));
   assert.ok(claudeLine.includes(formatResetWhen(259200, now)));
   assert.ok(!claudeLine.includes("grok"));
+
+  const later = renderFooterLines(
+    theme,
+    [grok, claude],
+    160,
+    "anthropic",
+    now,
+    now + 3600_000,
+  )[0];
+  assert.ok(later.includes(formatResetWhen(7200, now, now + 3600_000)));
+  assert.ok(later.includes("14:07 (1h)"));
+  assert.ok(!later.includes("14:07 (2h)"));
 });
 
 test("footer unknown and stale", () => {

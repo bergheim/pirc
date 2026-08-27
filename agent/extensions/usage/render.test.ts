@@ -24,7 +24,12 @@ import {
   parseGoogleQuota,
   parseGrokBilling,
 } from "./parse.ts";
-import { quotaProvider, recentEditedPaths, renderFooterLines } from "./index.ts";
+import {
+  quotaProvider,
+  quotaSnapshot,
+  recentEditedPaths,
+  renderFooterLines,
+} from "./index.ts";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -42,6 +47,8 @@ const sample: CurrentSession = {
   tokens: 120000,
   cost: 1.23,
   cacheRemainingSeconds: null,
+  quota: null,
+  quotaPercent: null,
 };
 
 test("recentEditedPaths prefers latest unique edits", () => {
@@ -53,7 +60,11 @@ test("recentEditedPaths prefers latest unique edits", () => {
           message: {
             role: "assistant",
             content: [
-              { type: "toolCall", name: "edit", arguments: { path: "/old" } },
+              {
+                type: "toolCall",
+                name: "edit",
+                arguments: { path: "/old" },
+              },
             ],
           },
         },
@@ -62,8 +73,16 @@ test("recentEditedPaths prefers latest unique edits", () => {
           message: {
             role: "assistant",
             content: [
-              { type: "toolCall", name: "write", arguments: { path: "/new" } },
-              { type: "toolCall", name: "edit", arguments: { path: "/old" } },
+              {
+                type: "toolCall",
+                name: "write",
+                arguments: { path: "/new" },
+              },
+              {
+                type: "toolCall",
+                name: "edit",
+                arguments: { path: "/old" },
+              },
             ],
           },
         },
@@ -193,7 +212,10 @@ test("promptCacheTtlSeconds matches provider docs", () => {
     promptCacheTtlSeconds("openai-codex", "gpt-5.6", undefined),
     null,
   );
-  assert.equal(promptCacheTtlSeconds("openai-codex", "gpt-5.6", "long"), 86400);
+  assert.equal(
+    promptCacheTtlSeconds("openai-codex", "gpt-5.6", "long"),
+    86400,
+  );
   assert.equal(
     promptCacheTtlSeconds(
       "gateway",
@@ -359,8 +381,18 @@ test("quotaProvider maps direct accounts only", () => {
   assert.equal(quotaProvider("claude-bridge"), null);
 });
 
-test("footer is current model only, with reset", () => {
+test("current line shows quota reset", () => {
   const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
+  const quota = `79% wk · ${formatResetWhen(3 * 86400, now)}`;
+  const plains = currentLineSegments({
+    ...sample,
+    quota,
+    quotaPercent: 79,
+  }).map((s) => s.plain);
+  assert.equal(plains[1], quota);
+});
+
+test("footer still lists every provider, without reset times", () => {
   const grok = {
     name: "grok",
     usage: {
@@ -380,48 +412,26 @@ test("footer is current model only, with reset", () => {
       sessionIsFiveHour: true,
     },
   };
-  const grokLine = renderFooterLines(theme, [grok, claude], 120, "xai", now)[0];
-  assert.match(grokLine, /grok 79% wk/);
-  assert.ok(grokLine.includes(formatResetWhen(3 * 86400, now)));
-  assert.ok(!grokLine.includes("claude"));
-
-  const claudeLine = renderFooterLines(theme, [grok, claude], 160, "anthropic", now)[0];
-  assert.match(claudeLine, /24% 5h/);
-  assert.ok(claudeLine.includes(formatResetWhen(7200, now)));
-  assert.ok(claudeLine.includes(formatResetWhen(259200, now)));
-  assert.ok(!claudeLine.includes("grok"));
-
-  const later = renderFooterLines(
-    theme,
-    [grok, claude],
-    160,
-    "anthropic",
-    now,
-    now + 3600_000,
-  )[0];
-  assert.ok(later.includes(formatResetWhen(7200, now, now + 3600_000)));
-  assert.ok(later.includes("14:07 (1h)"));
-  assert.ok(!later.includes("14:07 (2h)"));
+  const line = renderFooterLines(theme, [grok, claude], 200)[0];
+  assert.match(line, /grok 79% wk/);
+  assert.match(line, /claude 24% 5h \/ 41% wk/);
+  assert.ok(!line.includes("14:07"));
+  assert.ok(!line.includes("resets"));
 });
 
-test("footer unknown and stale", () => {
-  const grok = { name: "grok", stale: "expired" };
-  assert.match(renderFooterLines(theme, [grok], 80, "llama")[0], /—/);
-  assert.match(renderFooterLines(theme, [grok], 80, "xai")[0], /grok —/);
-  assert.match(renderFooterLines(theme, [], 80, "xai")[0], /loading/);
-});
-
-test("footer clips instead of wrapping", () => {
+test("quotaSnapshot pins wall clock to fetch time", () => {
+  const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
   const grok = {
     name: "grok",
     usage: {
       sessionPercent: 79,
       weeklyPercent: 79,
       resetsInSeconds: null,
-      weeklyResetsInSeconds: 3 * 86400,
+      weeklyResetsInSeconds: 7200,
     },
   };
-  const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
-  const line = renderFooterLines(theme, [grok], 12, "xai", now)[0];
-  assert.ok(cells(line) <= 12);
+  const later = quotaSnapshot([grok], "xai", now, now + 3600_000);
+  assert.equal(later.quotaPercent, 79);
+  assert.equal(later.quota, "79% wk · 14:07 (1h)");
+  assert.equal(quotaSnapshot([grok], "gateway", now, now).quota, null);
 });

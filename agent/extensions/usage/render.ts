@@ -20,6 +20,8 @@ export type CurrentSession = {
   tokens: number | null;
   cost: number;
   cacheRemainingSeconds: number | null;
+  quota: string | null;
+  quotaPercent: number | null;
 };
 
 export function renderBar(usedPercent: number, width = 10): string {
@@ -195,6 +197,15 @@ export function currentLineSegments(session: CurrentSession): Segment[] {
   const segs: Segment[] = [
     { key: "model", plain: modelTag(session), tone: "accent", keep: 100 },
   ];
+  if (session.quota) {
+    const color = barColor(session.quotaPercent ?? 0);
+    segs.push({
+      key: "quota",
+      plain: session.quota,
+      tone: color ? TONE[color] : "dim",
+      keep: 95,
+    });
+  }
   if (session.thinking)
     segs.push({
       key: "thinking",

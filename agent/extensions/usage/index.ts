@@ -69,13 +69,12 @@ function windowReset(
   return ` · ${formatResetWhen(seconds, measuredAtMs, nowMs)}`;
 }
 
-function plainSegment(
+function quotaPlain(
   status: ProviderStatus,
   measuredAtMs: number,
   nowMs: number,
-): string {
-  const label = `${providerIcon(status.name)} ${status.name}`;
-  if ("stale" in status) return `${label} —`;
+): { quota: string; quotaPercent: number } | null {
+  if ("stale" in status) return null;
   const {
     sessionPercent,
     weeklyPercent,
@@ -83,21 +82,45 @@ function plainSegment(
     weeklyResetsInSeconds,
   } = status.usage;
   if (weeklyOnly(status)) {
-    return `${label} ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds ?? resetsInSeconds, measuredAtMs, nowMs)}`;
+    return {
+      quota: `${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds ?? resetsInSeconds, measuredAtMs, nowMs)}`,
+      quotaPercent: weeklyPercent,
+    };
   }
-  return (
-    `${label} ${Math.round(sessionPercent)}% 5h${windowReset(resetsInSeconds, measuredAtMs, nowMs)}` +
-    ` / ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds, measuredAtMs, nowMs)}`
-  );
+  return {
+    quota:
+      `${Math.round(sessionPercent)}% 5h${windowReset(resetsInSeconds, measuredAtMs, nowMs)}` +
+      ` / ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds, measuredAtMs, nowMs)}`,
+    quotaPercent: sessionPercent,
+  };
 }
 
-function footerLine(
-  theme: Theme,
-  status: ProviderStatus,
+export function quotaSnapshot(
+  statuses: ProviderStatus[],
+  provider: string,
   measuredAtMs: number,
   nowMs: number,
-): string {
-  const segment = plainSegment(status, measuredAtMs, nowMs);
+): { quota: string | null; quotaPercent: number | null } {
+  const name = quotaProvider(provider);
+  if (!name) return { quota: null, quotaPercent: null };
+  const status = statuses.find((s) => s.name === name);
+  if (!status) return { quota: null, quotaPercent: null };
+  return quotaPlain(status, measuredAtMs, nowMs) ?? {
+    quota: null,
+    quotaPercent: null,
+  };
+}
+
+function plainSegment(status: ProviderStatus): string {
+  const label = `${providerIcon(status.name)} ${status.name}`;
+  if ("stale" in status) return `${label} —`;
+  const { sessionPercent, weeklyPercent } = status.usage;
+  if (weeklyOnly(status)) return `${label} ${Math.round(weeklyPercent)}% wk`;
+  return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
+}
+
+function footerLine(theme: Theme, status: ProviderStatus): string {
+  const segment = plainSegment(status);
   if ("stale" in status) return theme.fg("dim", segment);
   const percent = weeklyOnly(status)
     ? status.usage.weeklyPercent
@@ -111,8 +134,9 @@ function sessionCost(ctx: ExtensionContext | undefined): number {
   for (const entry of ctx?.sessionManager.getBranch() ?? []) {
     if (entry.type !== "message" || entry.message.role !== "assistant")
       continue;
-    const total = (entry.message as { usage?: { cost?: { total?: number } } })
-      .usage?.cost?.total;
+    const total = (
+      entry.message as { usage?: { cost?: { total?: number } } }
+    ).usage?.cost?.total;
     if (typeof total === "number" && Number.isFinite(total)) cost += total;
   }
   return cost;
@@ -185,52 +209,61 @@ function snapshotCurrent(
       promptCacheTtlSeconds(model?.provider ?? "", model?.id ?? ""),
       Date.now(),
     ),
+    quota: null,
+    quotaPercent: null,
   };
 }
 
-// One line, current provider only. Measure uncolored text, then paint, so a
-// width clip can never slice an ANSI sequence.
+// pi's Component.render(width) contract requires every returned line to fit
+// the viewport; a narrow terminal can't always show all providers. We drop
+// whole columns rather than wrap (footer must stay one line) or truncate
+// inside a colored segment (would cut an ANSI escape in half and corrupt the
+// terminal). Included/omitted is decided on the plain, uncolored text, then
+// theme.fg is applied only to segments already known to fit.
 export function renderFooterLines(
   theme: Theme,
   statuses: ProviderStatus[],
   width: number,
-  currentProvider?: string,
-  measuredAtMs = Date.now(),
-  nowMs = measuredAtMs,
 ): string[] {
   const safeWidth = Math.max(0, width);
+
   const title = "󰐱 limits";
-  const dim = (s: string) => [theme.fg("dim", clip(s, safeWidth))];
-
-  if (statuses.length === 0) return dim(`${title} · loading…`);
-
-  const name = currentProvider ? quotaProvider(currentProvider) : null;
-  if (!name) return dim(`${title} · —`);
-  const status = statuses.find((s) => s.name === name);
-  if (!status) return dim(`${title} · loading…`);
+  if (statuses.length === 0) {
+    return [theme.fg("dim", clip(`${title} · loading…`, safeWidth))];
+  }
 
   if (safeWidth <= cells(title))
     return [theme.fg("accent", theme.bold(clip(title, safeWidth)))];
 
   const sep = " · ";
-  const segment = plainSegment(status, measuredAtMs, nowMs);
-  const full = `${title}${sep}${segment}`;
-  if (cells(full) <= safeWidth) {
-    return [
-      [
-        theme.fg("accent", theme.bold(title)),
-        footerLine(theme, status, measuredAtMs, nowMs),
-      ].join(sep),
-    ];
+  const included: ProviderStatus[] = [];
+  let used = cells(title);
+  for (const status of statuses) {
+    const seg = plainSegment(status);
+    const next = used + sep.length + cells(seg);
+    if (next > safeWidth) break;
+    included.push(status);
+    used = next;
   }
-  if (cells(segment) <= safeWidth)
-    return [footerLine(theme, status, measuredAtMs, nowMs)];
-  return [clip(segment, safeWidth)];
+
+  const parts = [
+    theme.fg("accent", theme.bold(title)),
+    ...included.map((s) => footerLine(theme, s)),
+  ];
+  const omitted = statuses.length - included.length;
+  if (omitted > 0) {
+    const marker = `+${omitted}`;
+    if (used + sep.length + marker.length <= safeWidth) {
+      parts.push(theme.fg("dim", marker));
+    }
+  }
+  return [parts.join(sep)];
 }
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("usage", {
-    description: "Show provider quota for Grok, Claude, Codex, and Antigravity",
+    description:
+      "Show provider quota for Grok, Claude, Codex, and Antigravity",
     handler: async (_args, ctx) => {
       const statuses = await fetchAll();
       ctx.ui.notify(statuses.map(line).join("\n"), "info");
@@ -252,7 +285,14 @@ export default function (pi: ExtensionAPI) {
   async function updateRepo(directory: string): Promise<boolean> {
     const result = await pi.exec(
       "git",
-      ["-C", directory, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD"],
+      [
+        "-C",
+        directory,
+        "rev-parse",
+        "--show-toplevel",
+        "--abbrev-ref",
+        "HEAD",
+      ],
       { timeout: 2000 },
     );
     if (result.code !== 0) return false;
@@ -261,9 +301,13 @@ export default function (pi: ExtensionAPI) {
     gitRoot = root;
     gitBranch = branch;
     worktree = basename(root);
-    const status = await pi.exec("git", ["-C", root, "status", "--porcelain"], {
-      timeout: 2000,
-    });
+    const status = await pi.exec(
+      "git",
+      ["-C", root, "status", "--porcelain"],
+      {
+        timeout: 2000,
+      },
+    );
     gitDirty = status.code === 0 && status.stdout.trim().length > 0;
     requestRender?.();
     return true;
@@ -294,12 +338,20 @@ export default function (pi: ExtensionAPI) {
         },
         invalidate() {},
         render(width: number): string[] {
-          const current = snapshotCurrent(
-            ctxRef,
-            gitBranch ?? footerData.getGitBranch(),
-            worktree,
-            gitDirty,
-          );
+          const current = {
+            ...snapshotCurrent(
+              ctxRef,
+              gitBranch ?? footerData.getGitBranch(),
+              worktree,
+              gitDirty,
+            ),
+            ...quotaSnapshot(
+              statuses,
+              ctxRef?.model?.provider ?? "?",
+              measuredAtMs,
+              Date.now(),
+            ),
+          };
           if (current.cacheRemainingSeconds === null) {
             stopTick();
           } else if (tick === undefined)
@@ -307,14 +359,7 @@ export default function (pi: ExtensionAPI) {
           return [
             "",
             renderCurrentLine(theme, current, width),
-            ...renderFooterLines(
-              theme,
-              statuses,
-              width,
-              current.provider,
-              measuredAtMs,
-              Date.now(),
-            ),
+            ...renderFooterLines(theme, statuses, width),
           ];
         },
       };

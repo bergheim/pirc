@@ -42,9 +42,7 @@ export default function (pi: ExtensionAPI): void {
         if (!q && !a) return undefined;
         const box = new Box(0, 0, (s) => theme.bg("userMessageBg", s));
         box.addChild(
-            new Text(
-                theme.fg("customMessageLabel", theme.italic(theme.bold("btw"))),
-            ),
+            new Text(theme.fg("customMessageLabel", theme.bold("btw"))),
         );
         if (q) box.addChild(new Text(theme.fg("customMessageText", q)));
         if (a) box.addChild(new Text(theme.fg("userMessageText", a)));

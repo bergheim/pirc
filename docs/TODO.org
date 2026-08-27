@@ -109,3 +109,15 @@ CLOSED: [2026-08-26 Wed 21:35]
   dark theme 16-color aliases; light 230 left dirty
 :END:
 Commit remaining bergheim-ansi-dark 16-color aliases (user/custom white/black, bright diffs). Leave light 230 unstaged.
+
+* DONE Show current-model quota reset in footer                      :pi:tui:
+CLOSED: [2026-08-27 Thu 22:29]
+:PROPERTIES:
+:ID:       20260827T202517Z-571d5a
+:CREATED:  [2026-08-27 Thu 22:25]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-27 Thu 22:29] \\
+  Current provider only; local wall clock plus remaining.
+:END:
+Footer shows only the active provider quota plus local wall-clock reset and remaining duration.

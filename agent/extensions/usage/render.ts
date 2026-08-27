@@ -56,6 +56,54 @@ export function formatDuration(seconds: number): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+function startOfLocalDay(ms: number): number {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// Local wall clock: same day is HH:MM, this week is "Sun 12:07", else "24 Aug 12:07".
+export function formatLocalWhen(atMs: number, nowMs: number): string {
+  if (!Number.isFinite(atMs) || !Number.isFinite(nowMs)) return "0s";
+  const at = new Date(atMs);
+  const time = `${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
+  const dayDiff = Math.round(
+    (startOfLocalDay(atMs) - startOfLocalDay(nowMs)) / 86_400_000,
+  );
+  if (dayDiff === 0) return time;
+  if (dayDiff > 0 && dayDiff < 7) return `${WEEKDAYS[at.getDay()]} ${time}`;
+  return `${pad2(at.getDate())} ${MONTHS[at.getMonth()]} ${time}`;
+}
+
+export function formatResetWhen(
+  seconds: number,
+  measuredAtMs: number,
+  nowMs = measuredAtMs,
+): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0s";
+  const atMs = measuredAtMs + seconds * 1000;
+  return `${formatLocalWhen(atMs, nowMs)} (${formatDuration((atMs - nowMs) / 1000)})`;
+}
+
 // ccusage-style remaining: keep minutes on an hour so "2h 45m left" isn't flattened to "2h".
 export function formatRemaining(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0s";

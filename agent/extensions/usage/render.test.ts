@@ -10,7 +10,9 @@ import {
   fitSegments,
   formatDuration,
   formatK,
+  formatLocalWhen,
   formatRemaining,
+  formatResetWhen,
   promptCacheTtlSeconds,
   renderBar,
   renderCurrentLine,
@@ -22,7 +24,7 @@ import {
   parseGoogleQuota,
   parseGrokBilling,
 } from "./parse.ts";
-import { recentEditedPaths } from "./index.ts";
+import { quotaProvider, recentEditedPaths, renderFooterLines } from "./index.ts";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -323,4 +325,103 @@ test("parseGrokBilling reads weekly credits", () => {
   assert.equal(usage.weeklyPercent, 1);
   assert.equal(usage.resetsInSeconds, null);
   assert.equal(usage.weeklyResetsInSeconds, 7 * 24 * 3600);
+});
+
+test("formatLocalWhen is local wall clock", () => {
+  const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
+  assert.equal(
+    formatLocalWhen(new Date(2026, 7, 17, 14, 7, 0).getTime(), now),
+    "14:07",
+  );
+  assert.equal(
+    formatLocalWhen(new Date(2026, 7, 20, 12, 7, 0).getTime(), now),
+    "Thu 12:07",
+  );
+  assert.equal(
+    formatLocalWhen(new Date(2026, 7, 31, 6, 26, 0).getTime(), now),
+    "31 Aug 06:26",
+  );
+});
+
+test("formatResetWhen is absolute (relative)", () => {
+  const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
+  assert.equal(formatResetWhen(7200, now), "14:07 (2h)");
+  assert.equal(formatResetWhen(3 * 86400, now), "Thu 12:07 (3d)");
+  assert.equal(formatResetWhen(7200, now, now + 3600_000), "14:07 (1h)");
+});
+
+test("quotaProvider maps direct accounts only", () => {
+  assert.equal(quotaProvider("xai"), "grok");
+  assert.equal(quotaProvider("anthropic"), "claude");
+  assert.equal(quotaProvider("openai-codex"), "codex");
+  assert.equal(quotaProvider("agy"), "antigravity");
+  assert.equal(quotaProvider("gateway"), null);
+  assert.equal(quotaProvider("claude-bridge"), null);
+});
+
+test("footer is current model only, with reset", () => {
+  const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
+  const grok = {
+    name: "grok",
+    usage: {
+      sessionPercent: 79,
+      weeklyPercent: 79,
+      resetsInSeconds: null,
+      weeklyResetsInSeconds: 3 * 86400,
+    },
+  };
+  const claude = {
+    name: "claude",
+    usage: {
+      sessionPercent: 24,
+      weeklyPercent: 41,
+      resetsInSeconds: 7200,
+      weeklyResetsInSeconds: 259200,
+      sessionIsFiveHour: true,
+    },
+  };
+  const grokLine = renderFooterLines(theme, [grok, claude], 120, "xai", now)[0];
+  assert.match(grokLine, /grok 79% wk/);
+  assert.ok(grokLine.includes(formatResetWhen(3 * 86400, now)));
+  assert.ok(!grokLine.includes("claude"));
+
+  const claudeLine = renderFooterLines(theme, [grok, claude], 160, "anthropic", now)[0];
+  assert.match(claudeLine, /24% 5h/);
+  assert.ok(claudeLine.includes(formatResetWhen(7200, now)));
+  assert.ok(claudeLine.includes(formatResetWhen(259200, now)));
+  assert.ok(!claudeLine.includes("grok"));
+
+  const later = renderFooterLines(
+    theme,
+    [grok, claude],
+    160,
+    "anthropic",
+    now,
+    now + 3600_000,
+  )[0];
+  assert.ok(later.includes(formatResetWhen(7200, now, now + 3600_000)));
+  assert.ok(later.includes("14:07 (1h)"));
+  assert.ok(!later.includes("14:07 (2h)"));
+});
+
+test("footer unknown and stale", () => {
+  const grok = { name: "grok", stale: "expired" };
+  assert.match(renderFooterLines(theme, [grok], 80, "llama")[0], /—/);
+  assert.match(renderFooterLines(theme, [grok], 80, "xai")[0], /grok —/);
+  assert.match(renderFooterLines(theme, [], 80, "xai")[0], /loading/);
+});
+
+test("footer clips instead of wrapping", () => {
+  const grok = {
+    name: "grok",
+    usage: {
+      sessionPercent: 79,
+      weeklyPercent: 79,
+      resetsInSeconds: null,
+      weeklyResetsInSeconds: 3 * 86400,
+    },
+  };
+  const now = new Date(2026, 7, 17, 12, 7, 0).getTime();
+  const line = renderFooterLines(theme, [grok], 12, "xai", now)[0];
+  assert.ok(cells(line) <= 12);
 });

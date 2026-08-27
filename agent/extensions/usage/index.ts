@@ -10,6 +10,7 @@ import {
   cells,
   clip,
   formatDuration,
+  formatResetWhen,
   renderCurrentLine,
   TONE,
   cacheRemainingSeconds,
@@ -49,16 +50,45 @@ function weeklyOnly(status: ProviderStatus): boolean {
   );
 }
 
-function plainSegment(status: ProviderStatus): string {
-  const label = `${providerIcon(status.name)} ${status.name}`;
-  if ("stale" in status) return `${label} —`;
-  const { sessionPercent, weeklyPercent } = status.usage;
-  if (weeklyOnly(status)) return `${label} ${Math.round(weeklyPercent)}% wk`;
-  return `${label} ${Math.round(sessionPercent)}% 5h / ${Math.round(weeklyPercent)}% wk`;
+// Direct-account quota only. OpenRouter / gateway / claude-bridge share
+// neither these credentials nor these windows.
+export function quotaProvider(provider: string): string | null {
+  if (provider === "xai") return "grok";
+  if (provider === "anthropic") return "claude";
+  if (provider === "openai-codex") return "codex";
+  if (provider === "agy") return "antigravity";
+  return null;
 }
 
-function footerLine(theme: Theme, status: ProviderStatus): string {
-  const segment = plainSegment(status);
+function windowReset(seconds: number | null, nowMs: number): string {
+  if (seconds === null) return "";
+  return ` · ${formatResetWhen(seconds, nowMs)}`;
+}
+
+function plainSegment(status: ProviderStatus, nowMs: number): string {
+  const label = `${providerIcon(status.name)} ${status.name}`;
+  if ("stale" in status) return `${label} —`;
+  const {
+    sessionPercent,
+    weeklyPercent,
+    resetsInSeconds,
+    weeklyResetsInSeconds,
+  } = status.usage;
+  if (weeklyOnly(status)) {
+    return `${label} ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds ?? resetsInSeconds, nowMs)}`;
+  }
+  return (
+    `${label} ${Math.round(sessionPercent)}% 5h${windowReset(resetsInSeconds, nowMs)}` +
+    ` / ${Math.round(weeklyPercent)}% wk${windowReset(weeklyResetsInSeconds, nowMs)}`
+  );
+}
+
+function footerLine(
+  theme: Theme,
+  status: ProviderStatus,
+  nowMs: number,
+): string {
+  const segment = plainSegment(status, nowMs);
   if ("stale" in status) return theme.fg("dim", segment);
   const percent = weeklyOnly(status)
     ? status.usage.weeklyPercent
@@ -149,50 +179,41 @@ function snapshotCurrent(
   };
 }
 
-// pi's Component.render(width) contract requires every returned line to fit
-// the viewport; a narrow terminal can't always show all providers. We drop
-// whole columns rather than wrap (footer must stay one line) or truncate
-// inside a colored segment (would cut an ANSI escape in half and corrupt the
-// terminal). Included/omitted is decided on the plain, uncolored text, then
-// theme.fg is applied only to segments already known to fit.
+// One line, current provider only. Measure uncolored text, then paint, so a
+// width clip can never slice an ANSI sequence.
 export function renderFooterLines(
   theme: Theme,
   statuses: ProviderStatus[],
   width: number,
+  currentProvider?: string,
+  nowMs = Date.now(),
 ): string[] {
   const safeWidth = Math.max(0, width);
-
   const title = "󰐱 limits";
-  if (statuses.length === 0) {
-    return [theme.fg("dim", clip(`${title} · loading…`, safeWidth))];
-  }
+  const dim = (s: string) => [theme.fg("dim", clip(s, safeWidth))];
+
+  if (statuses.length === 0) return dim(`${title} · loading…`);
+
+  const name = currentProvider ? quotaProvider(currentProvider) : null;
+  if (!name) return dim(`${title} · —`);
+  const status = statuses.find((s) => s.name === name);
+  if (!status) return dim(`${title} · loading…`);
 
   if (safeWidth <= cells(title))
     return [theme.fg("accent", theme.bold(clip(title, safeWidth)))];
 
   const sep = " · ";
-  const included: ProviderStatus[] = [];
-  let used = cells(title);
-  for (const status of statuses) {
-    const seg = plainSegment(status);
-    const next = used + sep.length + cells(seg);
-    if (next > safeWidth) break;
-    included.push(status);
-    used = next;
+  const segment = plainSegment(status, nowMs);
+  const full = `${title}${sep}${segment}`;
+  if (cells(full) <= safeWidth) {
+    return [
+      [theme.fg("accent", theme.bold(title)), footerLine(theme, status, nowMs)].join(
+        sep,
+      ),
+    ];
   }
-
-  const parts = [
-    theme.fg("accent", theme.bold(title)),
-    ...included.map((s) => footerLine(theme, s)),
-  ];
-  const omitted = statuses.length - included.length;
-  if (omitted > 0) {
-    const marker = `+${omitted}`;
-    if (used + sep.length + marker.length <= safeWidth) {
-      parts.push(theme.fg("dim", marker));
-    }
-  }
-  return [parts.join(sep)];
+  if (cells(segment) <= safeWidth) return [footerLine(theme, status, nowMs)];
+  return [clip(segment, safeWidth)];
 }
 
 export default function (pi: ExtensionAPI) {
@@ -272,7 +293,7 @@ export default function (pi: ExtensionAPI) {
           return [
             "",
             renderCurrentLine(theme, current, width),
-            ...renderFooterLines(theme, statuses, width),
+            ...renderFooterLines(theme, statuses, width, current.provider),
           ];
         },
       };

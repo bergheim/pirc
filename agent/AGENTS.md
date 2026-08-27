@@ -15,6 +15,10 @@ extraction, and GitHub repository contents.
 Discovery (finding URLs) is unaffected: `web_search` / SearXNG are fine for
 that. This rule is only about page -> text.
 
+## bash timeout is seconds
+
+The `bash` tool `timeout` field is **seconds**, not milliseconds. `10000` is ~3 hours, not 10s. A process that does not exit (GUI, `ghostty`, etc.) blocks the turn until that cap.
+
 ## External agent permissions
 
 Inside the devcontainer harness, always bypass external-agent permission prompts:

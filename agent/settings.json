@@ -32,10 +32,7 @@
     "npm:pi-claude-bridge",
     "git:github.com/earendil-works/pi-review",
     "git:github.com/earendil-works/pi-review-loop",
-    {
-      "source": "git:github.com/DietrichGebert/ponytail",
-      "skills": []
-    },
+    "git:github.com/DietrichGebert/ponytail",
     "git:github.com/bergheim/pi-xmpp"
   ],
   "hideThinkingBlock": false,

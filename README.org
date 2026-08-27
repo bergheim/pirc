@@ -9,6 +9,10 @@ This checkout is my live Pi config: settings, packages, themes, keybindings, ext
 - =AGENTS.md= — rules for changing this repo
 - =agent/= — live Pi config
 
+* Skills
+
+User-managed skills live in =~/.agents/skills=. Do not put copies in =agent/skills/=. Ponytail loads from its package; pi-lens injects its own.
+
 * Extensions
 
 Local, under =agent/extensions/=. Packages live in =settings.json=, not here.
@@ -20,7 +24,6 @@ Local, under =agent/extensions/=. Packages live in =settings.json=, not here.
 - =effort-alias= — =/effort= sets thinking level
 - =inline-skills= — expands =$skill= mentions in a normal prompt
 - =ntfy= — ntfy ping when a TUI turn is slow or the session quits (host topic =pi=, Jolo topic =jolo=)
-- =materialize-package-skills= — copies package skills into the user skill dir (skips pi-lens)
 - =pi-official-subagent= — loads Pi's bundled subagent extension
 - =pi-vim-jk= — jk to NORMAL; edge j/k walks prompt history
 - =theme-toggle= — alt+shift+d flips latte/mocha

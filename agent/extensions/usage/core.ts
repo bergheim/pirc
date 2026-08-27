@@ -217,7 +217,8 @@ const PROVIDERS = [
   },
   {
     name: "antigravity",
-    read: (_nowMs: number) => readAntigravityCredential(),
+    read: (nowMs: number) =>
+      readAntigravityCredential(undefined, undefined, nowMs),
     request: requestAntigravity,
     parse: (payload: unknown, nowMs: number) =>
       parseGoogleQuota(payload, nowMs),

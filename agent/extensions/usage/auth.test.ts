@@ -3,10 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-    readAnthropicCredential,
-    readAntigravityCredential,
-} from "./auth.ts";
+import { readAnthropicCredential, readAntigravityCredential } from "./auth.ts";
 
 const now = 1_000;
 

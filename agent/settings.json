@@ -42,5 +42,13 @@
   "enableInstallTelemetry": false,
   "showCacheMissNotices": true,
   "treeFilterMode": "user-only",
-  "quietStartup": true
+  "quietStartup": true,
+  "piVim": {
+    "modeColors": {
+      "insert": "borderAccent",
+      "normal": "borderMuted",
+      "visual": "customMessageLabel",
+      "ex": "warning"
+    }
+  }
 }

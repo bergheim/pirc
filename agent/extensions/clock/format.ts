@@ -16,16 +16,16 @@ export function stampText(
     data: ClockData | undefined,
     liveMs?: number,
 ): string {
+    const settled = Number.isFinite(data?.d);
+    const liveOnly = data?.live === true && !settled;
+    if (liveOnly && !Number.isFinite(liveMs)) return "";
     const parts: string[] = [];
     if (Number.isFinite(data?.t)) parts.push(hhmmss(data.t as number));
-    const settled = Number.isFinite(data?.d);
     const durMs = settled ? (data.d as number) : liveMs;
     if (Number.isFinite(durMs)) {
         const dur = formatDuration(durMs as number);
         if (dur) {
-            parts.push(
-                `${settled ? CLOCK_DONE : CLOCK_LIVE} ${dur}`,
-            );
+            parts.push(`${settled ? CLOCK_DONE : CLOCK_LIVE} ${dur}`);
         }
     }
     return parts.join(" · ");

@@ -1,7 +1,7 @@
 /**
  * Dim right-aligned HH:mm:ss after each TUI user/assistant message.
  * During a run, a live `󰔛 12s` ticks on TUI redraws (working indicator).
- * After settle, `󰄬 12s`. Custom entries stay out of model context.
+ * After settle, same line becomes `HH:mm:ss · 󰄬 12s`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -11,6 +11,7 @@ import { stampText } from "./format.ts";
 export default function (pi: ExtensionAPI): void {
     let runStart: number | undefined;
     let liveEntryPending = false;
+    let liveStampT: number | undefined;
 
     pi.registerEntryRenderer<ClockData>(CLOCK_TYPE, (entry, _opts, theme) => {
         return {
@@ -33,6 +34,7 @@ export default function (pi: ExtensionAPI): void {
     const reset = () => {
         runStart = undefined;
         liveEntryPending = false;
+        liveStampT = undefined;
     };
 
     pi.on("session_start", reset);
@@ -53,16 +55,20 @@ export default function (pi: ExtensionAPI): void {
         if (!Number.isFinite(t)) return;
         const next = clockDataForMessage(role, t, liveEntryPending);
         liveEntryPending = next.liveEntryPending;
+        if (next.data.live) liveStampT = next.data.t;
         // Persistence happens after message_end; defer so this entry stays below it.
         setTimeout(() => pi.appendEntry<ClockData>(CLOCK_TYPE, next.data), 0);
     });
 
     pi.on("agent_settled", (_event, ctx) => {
         const startedAt = runStart;
+        const stampT = liveStampT;
         runStart = undefined;
         liveEntryPending = false;
+        liveStampT = undefined;
         if (ctx.mode !== "tui" || startedAt === undefined) return;
         pi.appendEntry<ClockData>(CLOCK_TYPE, {
+            t: stampT,
             d: performance.now() - startedAt,
         });
     });

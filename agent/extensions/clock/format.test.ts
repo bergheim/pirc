@@ -16,6 +16,7 @@ test("formatDuration buckets", () => {
 test("stampText live vs settled duration", () => {
     assert.equal(stampText({ live: true }, 12_000), `${CLOCK_LIVE} 12s`);
     assert.equal(stampText({ live: true }), "");
+    assert.equal(stampText({ t: 1, live: true }), "");
     assert.equal(stampText({ d: 12_000 }, 99_000), `${CLOCK_DONE} 12s`);
     assert.ok(
         stampText({

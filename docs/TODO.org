@@ -121,3 +121,213 @@ CLOSED: [2026-08-27 Thu 22:29]
   Current provider only; local wall clock plus remaining.
 :END:
 Footer shows only the active provider quota plus local wall-clock reset and remaining duration.
+
+* TODO Spike Pi context into a Herdr worktree  :pi:herdr:worktree:spike:
+:PROPERTIES:
+:ID:       20260828T065726Z-36d40d
+:CREATED:  [2026-08-28 Fri 08:57]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-28 Fri 09:02] \\
+  Codex review (CLI / races / sessions / tests):
+  - [blocker] pi 0.84.3 SessionManager.forkFrom() copies every JSONL entry and restores the last persisted leaf, not necessarily ctx.sessionManager.getLeafId(). After /tree navigation, pi --fork can clone the wrong active branch.
+  - [blocker] Extension commands may run while Pi is streaming. Wait for source idle before capturing/copying, or the fork omits the in-flight turn. Once idle, Pi writes entries synchronously — no extra disk flush then needed.
+  - [correction] herdr agent wait --until idle never returns for blocked. Use default settled states or --until idle --until blocked, plus a timeout.
+  - [correction] herdr agent prompt uses bracketed paste plus Enter; Pi TUI handles /compact as a built-in command. Use --wait --timeout. Idle is not proof of compact — confirm a new compaction entry before reporting success.
+  - [correction] herdr agent start passes argv after -- to the executable, so --kind pi -- --fork <path> is pi --fork <path>.
+  - [risk] worktree create returning does not document that the root shell is already at an interactive prompt; agent start requires one. Retry/poll readiness rather than treating create/start as a permanent fail.
+  - [risk] Branch-uniqueness check before create is TOCTOU; --base HEAD can move. Let create reject collisions; pass the captured commit OID as --base.
+  - [risk] Validate returned root pane cwd against returned checkout path before starting Pi. agent start has no cwd option; --fork session storage follows the launched process cwd.
+  - [risk] After agent start timeout / agent_not_ready, Pi may already occupy the pane. Do not print an unconditional rerun until agent get/read shows the pane is still a shell.
+  - [correction] SessionManager.isPersisted() only means persistence is enabled. Require getSessionFile() to exist as a readable regular file before --fork.
+  - [risk] Treat exit status, stdout JSON envelope, and stderr separately; schema-validate workspace, checkout, and root-pane IDs. Raw-output fallback may leave a workspace without recovery IDs.
+  - [risk] Test matrix should add contract tests: canned create/start JSON, malformed/error envelopes, argv with spaces and --, active-leaf-after-/tree, streaming invocation, branch collision, delayed shell readiness, compaction-entry verification.
+- Note taken on [2026-08-28 Fri 09:02] \\
+  Claude review (product / UX / safety):
+  - [blocker] Preconditions / flow step 5: new worktree path is not in agent/trust.json, so forked Pi hits the project-trust prompt. herdr agent start may report ready while sitting on that prompt; agent prompt then rejects with agent_blocked. Decide: pass a trust-skip flag, pre-seed trust for the checkout path, or document "answer the trust prompt in the new pane first".
+  - [blocker] Session flush is a correctness precondition, not a deferred question. The /herdr-fork turn may not be on disk when pi --fork reads the file. Clone can start truncated and still pass a MARKER test. Require explicit flush/persist before step 5, or refuse.
+  - [correction] Focus text does double duty as branch slug and compact prompt. Named-branch-with-full-context vs unnamed-compact cannot be expressed. Spike: state the coupling in command help rather than adding flags.
+  - [risk] If agent prompt sends /compact as literal text, the clone answers it and pollutes context. No detection. Answer that question out-of-band first; until then print the manual /compact instruction and do not send.
+  - [risk] agent prompt types into a pane. Newlines or a leading / in focus text can submit early or run a different command. Reject/strip control characters at validation.
+  - [correction] Success "source bit-wise unchanged" is false: the invocation itself appends to source JSONL. Real invariant: same session id, cwd, branch; no compaction entry; no rewind; no pane close.
+  - [risk] Clone shares .git with source. Isolation is worktree-local only; stash / branch -D / rebase / git config on the clone can hit the source. Say so in the command report.
+  - [correction] Refuse ~/.pi by realpath of the git common dir, not a string match (bind-mount aliases).
+  - [risk] git status --porcelain also fails on harmless untracked paths, which may make the command unusable. Untracked files are not copied. Consider refusing only tracked modifications and listing the blocking files.
+  - [nit] agent prompt already rejects agent_blocked and supports --wait --until idle; separate agent wait is redundant. Require a timeout.
+  - [nit] worktree create --help shows no --json; confirm how JSON is requested before writing a parser.
+  - [nit] Cap/sanitize slug (length, no leading -, no .., no trailing .lock). Free-text focus becomes a branch name that may be pushed.
+  - [nit] herdr-agent-state already reports session path; clone session id is likely queryable.
+:END:
+Spike: one command clones the *current* Pi conversation into a new git worktree and a new Herdr workspace, without mutating the source pane.
+
+This is host-only, clean-tree-only, and must not run against the live =~/.pi= config checkout.
+
+** UX
+
+Command (name bikesheddable):
+
+: /herdr-fork [focus instructions]
+
+Examples:
+
+- =/herdr-fork= — clone full context into a new worktree, no compact.
+- =/herdr-fork focus on the herdr worktree create JSON shape= — clone, then compact *the clone only* with that prompt.
+
+What the operator sees:
+
+- This pane, this session file, this cwd, this branch: untouched. No compact, no =/clone=, no =/fork=, no cwd change, no pane close.
+- A new Herdr workspace appears in the sidebar, *grouped under the parent repo workspace* (Herdr worktree grouping).
+- That workspace has a Pi agent that already has the conversation (or a compact of it).
+- The new checkout is a real git worktree on a new branch based at the source =HEAD=.
+
+Do *not* overload Pi's built-in =/fork= (rewind to a previous user message) or =/clone= (replace *this* TUI with a duplicate session at the same cwd). Those stay as they are.
+
+** Why this order (and not compact-then-create)
+
+1. =/clone= / =/fork= switch *this* TUI to the new session. Compact then mutates *this* context. Wrong pane.
+2. =herdr worktree create= does not inherit a Pi session. It creates a git checkout + a Herdr workspace + a *shell* pane. That *is* Herdr "picking it up" — there is no later discovery step.
+3. =pi --fork <source>= must run in the *new* cwd so the cloned session is stored in that project's session namespace, not =~/.pi='s.
+4. =/compact [prompt]= is lossy for the model (full JSONL history remains; =/tree= can revisit). Run it only on the clone, and only if the operator passed focus text.
+
+Pi's =examples/extensions/handoff.ts= is a possible later alternative to compact ("extract what matters"). Out of scope for this spike.
+
+** Preconditions (reject otherwise)
+
+- =HERDR_ENV=1=, =HERDR_SOCKET_PATH= set, =HERDR_PANE_ID= set. The command is a no-op with a clear error outside Herdr.
+- =herdr= CLI on PATH and the socket is reachable (=herdr workspace list= or equivalent).
+- Current Pi session is persisted (has a session file / id). If the session has not been saved yet, refuse — same class of failure as Pi's own "session must be saved first" fork guard.
+- Git repo, host-visible, not the live Pi config:
+  - Resolve repo root from the *project* cwd Pi is running in, not from Herdr's focused workspace if they diverge.
+  - Refuse if repo root is =~/.pi= or otherwise the live bind-mount config checkout.
+  - Refuse if not a git work tree, or if =git status --porcelain= is non-empty. Dirty files do *not* copy into a new worktree; the spike does not invent a stash/commit path.
+- New branch name is unique (see Open questions for collision behavior).
+- Host-only. No devcontainer, no =just wt=, no in-container tmux. Worktrees land where Herdr puts them (= [worktrees] directory=, default =~/.herdr/worktrees=), which is typically *outside* a container mount.
+
+** Non-goals
+
+- Copying uncommitted changes into the new worktree.
+- Devcontainer / jolo =just wt= / worktrunk / =@yassimba/pi-herdr-worktree=.
+- Mid-history rewind (Pi =/fork= from an old user message).
+- Reusing an existing worktree or branch as "the" destination.
+- Auto-closing the source pane, auto-deleting a failed checkout, merge-back, or cleanup UX.
+- Changing =agent/extensions/herdr-agent-state.ts= (Herdr-managed; reinstall overwrites it).
+
+** Exact flow
+
+1. *Validate.* Env, herdr socket, persisted session, git root, not =~/.pi=, clean tree. Fail before any create.
+2. *Name.* Derive a branch slug from focus text if present, else a timestamp/short-hash. Sanitize to a legal git branch (e.g. =feat/herdr-fork-<slug>=). Capture: repo root, =HEAD=, source session path *and* id, current Herdr workspace/pane ids.
+3. *Create checkout + workspace.*
+   : herdr worktree create --cwd <repo-root> --branch <branch> --base HEAD --label <short> --no-focus
+   Never =--focus=: this agent would follow the UI into the new workspace mid-command.
+4. *Parse JSON. Do not predict ids.* Capture at least: new workspace id, checkout path, root pane id. If the shape is not what we assumed, stop and print the raw JSON (see Open questions).
+5. *Start Pi in that pane, forking the source session into the new project.*
+   : herdr agent start <unique-name> --kind pi --pane <root-pane-id> -- --fork <source-session-path>
+   Use argv arrays, no shell interpolation of paths. Unique agent name so a second spike does not collide. The pane must be at an interactive shell prompt; =herdr agent start= already waits for agent readiness (default 30s).
+6. *Wait until the new agent is idle* (=herdr agent wait … --until idle=). If it sits in =blocked=, report and stop — do not send compact onto a permission prompt.
+7. *Optional compact, clone only.* If the operator passed focus text:
+   - Try =herdr agent prompt <name> "/compact <focus text>"= (or equivalent send).
+   - *Spike fallback:* if slash commands are not executed via =agent prompt= (they may be typed as a user message instead of a command), stop and tell the operator to run =/compact …= by hand in the new pane. Do not invent a Pi RPC compact call unless we already have evidence it is the reliable path.
+   - Never compact the source session.
+8. *Report. Leave the source pane running.* Print: branch, checkout path, workspace id, pane id, new agent name, new session id/path if discoverable, and whether compact ran or was left as a manual step.
+
+** Semantics to keep straight
+
+- Herdr does *not* discover git worktrees created with =git worktree add=. Only =herdr worktree create= / =open= make a grouped workspace.
+- =worktree create= = workspace + shell. It does not start Pi and does not copy a session.
+- =pi --fork <path|id>= copies the source session into a *new* session file in the *current* project's session dir. That is why it must run with cwd = the new worktree (which =herdr agent start= should inherit from the pane/workspace cwd).
+- Compaction is lossy for the model; the clone's JSONL still has history.
+- Source pane: no =ctx.fork()=, no =ctx.newSession()=, no compact, no close.
+
+** Failure safety
+
+- Source pane is sacred. No close, no compact, no session switch, no cwd change, on any path including errors after step 3.
+- If create succeeds and agent start fails: *keep* the worktree/workspace. Print the exact recovery command (=herdr agent start … -- --fork …=) and the exact remove command (=herdr worktree remove --workspace <id>=). Do not auto-remove.
+- If start succeeds and compact fails/is unsupported via prompt: keep the clone running with full context; report that compact is manual.
+- Quote-safe argv; do not interpolate focus text into a shell string.
+- Do not =git reset=, =stash=, or dirty the source tree to make the clean-tree check pass.
+
+** Open questions (answer during the spike, in the TODO log)
+
+- Exact JSON shape of =herdr worktree create= (workspace id, pane id field names, checkout path).
+- Does =herdr agent prompt= execute Pi slash commands (=/compact=), or does it send a user message that the model sees as text?
+- Does =pi --fork= copy the *active branch* of the source session, or the full JSONL including other branches? We want the active path, matching =/clone=.
+- Session flush: while this command runs, is the source JSONL fully written? Need to persist/flush before copy if not.
+- After cwd change, does the new Pi reload project instructions (=AGENTS.md=, skills) for the worktree? It should; confirm.
+- Branch collision: =herdr worktree create --branch= on an existing branch — fail, reuse, or create a second checkout? Spike should fail closed until we see the error.
+- Does =herdr agent start -- --fork <path>= pass extra args to =pi= as intended? Confirm with =herdr agent explain= / process list.
+- Worktree path vs repo remotes/hooks: any post-checkout hook that expects jolo/devcontainer will fire on a host checkout and may fail. Spike repo should be disposable and hook-light.
+
+** Test matrix (disposable *host* git repo, not =~/.pi=)
+
+Happy path:
+
+- Clean repo, Herdr pane, persisted session that contains a unique marker string in the conversation.
+- =/herdr-fork= with no focus: new grouped workspace, Pi idle, marker still in context, cwd is the worktree, branch is the new one, source session file and source pane unchanged (same id, no new compaction entry).
+- =/herdr-fork focus on MARKER=: compact (or documented manual fallback) only on the clone; source JSONL has no new compaction entry; clone still knows MARKER.
+
+Isolation:
+
+- Edits in the worktree do not appear in the source tree; source dirty check still clean after clone-side edits (until we touch shared git objects/branches — the source *branch* should be unchanged).
+
+Failures (no checkout, or leftover checkout retained with recovery text — never source mutation):
+
+- Dirty source tree.
+- Not a git repo.
+- Not in Herdr (=HERDR_ENV= unset).
+- Target is =~/.pi=.
+- Branch name collision.
+- =herdr= socket down.
+
+** Success criteria
+
+- One command from a Herdr-hosted Pi session produces a visible grouped worktree workspace with a usable inherited conversation.
+- Source pane/session/cwd/tree are bit-wise unchanged aside from this TODO's own git work (the spike implementation lives in =~/.pi=, the *target repo* of the fork is a different tree).
+- Failures are non-destructive to the source and do not silently delete a successful checkout.
+- Spike log records: exact commands, raw create JSON, ids, whether =--fork= landed in the worktree session dir, and whether =agent prompt /compact= actually compacted.
+
+** Likely implementation
+
+New *local* Pi extension beside =agent/extensions/herdr-agent-state.ts= (e.g. =agent/extensions/herdr-fork.ts=). Register =/herdr-fork=. Call =herdr= via =child_process= with argv arrays. Read session path from =ctx.sessionManager= the same way the managed Herdr integration already does.
+
+Do *not* edit =herdr-agent-state.ts=. Do *not* install =npm:@yassimba/pi-herdr-worktree= (worktrunk + split-pane, no new workspace row).
+
+Cookbook tension (stash =20260827T175527=): we previously said =just wt= owns worktrees and Herdr grouping is host-only. This spike *is* the Herdr-owned path, host-only, and does not replace =just wt= inside containers.
+
+** Out of repo / later
+
+- Compact-quality vs a dedicated handoff summary.
+- Container socket forwarding so a jolo agent can call =herdr=.
+- Dirty-tree policy (stash, commit, or refuse forever).
+- A =/herdr-fork= that targets an *existing* worktree.
+** Review follow-ups (folded into the plan)
+
+Taken from the Claude and Codex reviews in the LOGBOOK. Original comments stay there.
+
+Flow / precondition changes:
+
+- Wait until *this* Pi is idle before capturing the session file. Then require =getSessionFile()= to exist as a readable file (not merely =isPersisted()=). Codex: once idle, writes are synchronous, so that is the flush.
+- Capture the current leaf id. =pi --fork= (0.84.3 =forkFrom=) restores the last *persisted* leaf of the whole JSONL, which can be the wrong branch after =/tree=. Spike: refuse if leaf ≠ last persisted leaf, or document "= /tree= away from tip is unsupported".
+- =--base <captured-oid>=, not live =HEAD=. Do not pre-check branch uniqueness (TOCTOU); let =worktree create= fail on collision.
+- After create: schema-validate JSON (workspace id, checkout path, root pane id). Confirm how JSON is requested (=herdr= prints JSON on success; there is no =--json= flag in =--help=). Validate the root pane cwd equals the checkout path before =agent start= (=agent start= has no cwd flag).
+- Poll until the new pane is an interactive shell; do not treat create-return as start-ready.
+- New checkout is an untrusted Pi project. =agent start= "ready" may mean the *trust prompt*. Do not send compact onto it. Spike: stop and tell the operator to accept trust, *or* pass a confirmed trust-skip flag if one exists — pick during impl, do not guess =--approve=.
+- =herdr agent start --kind pi --pane <id> -- --fork <path>= *does* become =pi --fork <path>= (Codex confirmed). Close that open question.
+- After start: =agent wait= must include =blocked= *and* a timeout (=--until idle --until blocked=). If start times out, =agent get/read= before printing a rerun — Pi may already own the pane.
+- Compact: Codex says =agent prompt= + Enter runs =/compact= as a command; Claude says do not send until proven. Spike rule: *one scratch-pane test first*. Until that test is logged here, print the =/compact …= line and do not send. If/when sending, =--wait --timeout= and verify a new compaction entry in the *clone* JSONL before claiming success. Never send focus text that contains newlines or extra leading =/=.
+- Command help must state the spike coupling: the optional argument is both the compact prompt *and* the branch-slug source. No extra flags this spike.
+- Refuse live config by =realpath= of the git common dir against =~/.pi=, not a string match.
+- Clean-tree check: still refuse any porcelain for this spike, but the error must list the blocking paths. (Tracked-only is a later relaxation.)
+- Report text: source invariant is same session id / cwd / branch, no compaction entry, no rewind, no pane close — *not* bit-wise JSONL equality (the command itself appends). Isolation is worktree-local; clone and source share =.git=.
+
+Closed open questions:
+
+- Extra args after =herdr agent start --= reach =pi=. Yes.
+- =agent prompt= *probably* runs slash commands (Codex). Still unproven in our pane; see compact rule above.
+
+Still open (need a real create, not guessed):
+
+- Exact create JSON field names.
+- Branch collision error text from Herdr.
+- Pi trust-prompt skip flag name, if any.
+- Whether hooks on a disposable host repo fire.
+

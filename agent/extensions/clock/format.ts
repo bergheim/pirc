@@ -9,16 +9,22 @@ export function hhmmss(t: number): string {
     });
 }
 
+export const CLOCK_LIVE = "󰔛";
+export const CLOCK_DONE = "󰄬";
+
 export function stampText(
     data: ClockData | undefined,
     liveMs?: number,
 ): string {
     const parts: string[] = [];
     if (Number.isFinite(data?.t)) parts.push(hhmmss(data.t as number));
-    const durMs = Number.isFinite(data?.d) ? (data.d as number) : liveMs;
+    const settled = Number.isFinite(data?.d);
+    const durMs = settled ? (data.d as number) : liveMs;
     if (Number.isFinite(durMs)) {
         const dur = formatDuration(durMs as number);
-        if (dur) parts.push(`took ${dur}`);
+        if (dur) {
+            parts.push(settled ? `${CLOCK_DONE} took ${dur}` : `${CLOCK_LIVE} ${dur}`);
+        }
     }
     return parts.join(" · ");
 }

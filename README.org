@@ -22,6 +22,7 @@ Local, under =agent/extensions/=. Packages live in =settings.json=, not here.
 - =clock= — timestamps after user and assistant messages
 - =compact-tools= — tool-call display density (ctrl+b)
 - =effort-alias= — =/effort= sets thinking level
+- =herdr-fork= — =/herdr-fork [focus]= clones this session into a new Herdr worktree workspace (the arg is both the branch slug and the clone's manual =/compact= prompt)
 - =inline-skills= — expands =$skill= mentions in a normal prompt
 - =ntfy= — ntfy ping when a TUI turn is slow or the session quits (host topic =pi=, Jolo topic =jolo=)
 - =pi-official-subagent= — loads Pi's bundled subagent extension

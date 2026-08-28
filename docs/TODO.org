@@ -122,12 +122,14 @@ CLOSED: [2026-08-27 Thu 22:29]
 :END:
 Footer shows only the active provider quota plus local wall-clock reset and remaining duration.
 
-* TODO Spike Pi context into a Herdr worktree  :pi:herdr:worktree:spike:
+* INPROGRESS Spike Pi context into a Herdr worktree :pi:herdr:worktree:spike:
 :PROPERTIES:
 :ID:       20260828T065726Z-36d40d
 :CREATED:  [2026-08-28 Fri 08:57]
 :END:
 :LOGBOOK:
+- Note taken on [2026-08-28 Fri 09:36] \\
+  Implementation landed as agent/extensions/herdr-fork/. /herdr-fork registers, source pane is never switched/compacted/closed, compact stays print-only. 22 unit tests pass. Live smoke against a disposable host repo (not ~/.pi) still needed; this checkout must refuse.
 - Note taken on [2026-08-28 Fri 09:02] \\
   Codex review (CLI / races / sessions / tests):
   - [blocker] pi 0.84.3 SessionManager.forkFrom() copies every JSONL entry and restores the last persisted leaf, not necessarily ctx.sessionManager.getLeafId(). After /tree navigation, pi --fork can clone the wrong active branch.

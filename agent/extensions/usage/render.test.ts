@@ -29,7 +29,9 @@ import {
 import {
     extraCwd,
     lastUserSentAtMs,
+    mergeQuotaStatuses,
     quotaProvider,
+    quotaRefreshDelay,
     quotaSnapshot,
     recentEditedPaths,
     renderFooterLines,
@@ -598,6 +600,67 @@ test("formatResetWhen is absolute (relative)", () => {
     assert.equal(formatResetWhen(7200, now), "14:07 (2h)");
     assert.equal(formatResetWhen(3 * 86400, now), "Thu 12:07 (3d)");
     assert.equal(formatResetWhen(7200, now, now + 3600_000), "14:07 (1h)");
+});
+
+test("quota refresh keeps last good value for transient failures", () => {
+    const good = {
+        name: "claude",
+        usage: {
+            sessionPercent: 10,
+            weeklyPercent: 20,
+            resetsInSeconds: 3600,
+            weeklyResetsInSeconds: 7200,
+        },
+    };
+    assert.deepEqual(
+        mergeQuotaStatuses(
+            [good],
+            [{ name: "claude", stale: "timeout after 5000ms" }],
+            15,
+        ),
+        [
+            {
+                ...good,
+                usage: {
+                    ...good.usage,
+                    resetsInSeconds: 3585,
+                    weeklyResetsInSeconds: 7185,
+                },
+            },
+        ],
+    );
+    assert.deepEqual(
+        mergeQuotaStatuses([good], [{ name: "claude", stale: "http 429" }]),
+        [good],
+    );
+    assert.deepEqual(
+        mergeQuotaStatuses([good], [{ name: "claude", stale: "http 401" }]),
+        [{ name: "claude", stale: "http 401" }],
+    );
+});
+
+test("quota refresh retries transient failures sooner", () => {
+    assert.equal(
+        quotaRefreshDelay([{ name: "claude", stale: "timeout after 5000ms" }]),
+        15_000,
+    );
+    assert.equal(
+        quotaRefreshDelay([{ name: "antigravity", stale: "http 401" }]),
+        60_000,
+    );
+    assert.equal(
+        quotaRefreshDelay([
+            {
+                name: "claude",
+                usage: {
+                    sessionPercent: 10,
+                    weeklyPercent: 20,
+                    resetsInSeconds: 3600,
+                },
+            },
+        ]),
+        60_000,
+    );
 });
 
 test("quotaProvider maps direct accounts only", () => {

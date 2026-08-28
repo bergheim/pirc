@@ -20,6 +20,59 @@ import {
     type Theme,
 } from "./render.ts";
 
+const QUOTA_POLL_MS = 60_000;
+const QUOTA_RETRY_MS = 15_000;
+
+function transientQuotaFailure(status: ProviderStatus): boolean {
+    return (
+        "stale" in status &&
+        (/^timeout\b/.test(status.stale) ||
+            /^http 5\d\d$/.test(status.stale) ||
+            status.stale === "unreachable" ||
+            status.stale === "fetch failed")
+    );
+}
+
+function recoverableQuotaFailure(status: ProviderStatus): boolean {
+    return (
+        transientQuotaFailure(status) ||
+        ("stale" in status && status.stale === "http 429")
+    );
+}
+
+export function quotaRefreshDelay(statuses: ProviderStatus[]): number {
+    return statuses.some(transientQuotaFailure)
+        ? QUOTA_RETRY_MS
+        : QUOTA_POLL_MS;
+}
+
+export function mergeQuotaStatuses(
+    previous: ProviderStatus[],
+    next: ProviderStatus[],
+    elapsedSeconds = 0,
+): ProviderStatus[] {
+    const agedReset = (seconds: number | null | undefined) =>
+        seconds == null ? seconds : Math.max(0, seconds - elapsedSeconds);
+    return next.map((status) => {
+        if (!recoverableQuotaFailure(status)) return status;
+        const prior = previous.find(
+            (candidate) =>
+                candidate.name === status.name && "usage" in candidate,
+        );
+        if (!prior || !("usage" in prior)) return status;
+        return {
+            ...prior,
+            usage: {
+                ...prior.usage,
+                resetsInSeconds: agedReset(prior.usage.resetsInSeconds) ?? null,
+                weeklyResetsInSeconds: agedReset(
+                    prior.usage.weeklyResetsInSeconds,
+                ),
+            },
+        };
+    });
+}
+
 function line(status: ProviderStatus): string {
     if ("stale" in status) return `${status.name}: — (${status.stale})`;
     const { sessionPercent, weeklyPercent, resetsInSeconds } = status.usage;
@@ -297,6 +350,9 @@ export default function (pi: ExtensionAPI) {
     let statuses: ProviderStatus[] = [];
     let measuredAtMs = Date.now();
     let requestRender: (() => void) | undefined;
+    let quotaTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshPromise: Promise<ProviderStatus[]> | undefined;
+    let refreshGeneration = 0;
     let ctxRef: ExtensionContext | undefined;
     let worktree = "";
     let gitBranch: string | null = null;
@@ -334,10 +390,42 @@ export default function (pi: ExtensionAPI) {
         return true;
     }
 
-    async function refresh(): Promise<void> {
-        measuredAtMs = Date.now();
-        statuses = await fetchAll(measuredAtMs);
-        requestRender?.();
+    async function refresh(): Promise<ProviderStatus[]> {
+        if (refreshPromise) return refreshPromise;
+        const startedAtMs = Date.now();
+        const elapsedSeconds = Math.max(
+            0,
+            Math.floor((startedAtMs - measuredAtMs) / 1000),
+        );
+        measuredAtMs = startedAtMs;
+        refreshPromise = fetchAll(measuredAtMs)
+            .then((next) => {
+                statuses = mergeQuotaStatuses(statuses, next, elapsedSeconds);
+                requestRender?.();
+                return next;
+            })
+            .finally(() => {
+                refreshPromise = undefined;
+            });
+        return refreshPromise;
+    }
+
+    function stopQuotaRefresh(): void {
+        refreshGeneration++;
+        if (quotaTimer !== undefined) clearTimeout(quotaTimer);
+        quotaTimer = undefined;
+    }
+
+    async function refreshAndSchedule(): Promise<void> {
+        const generation = ++refreshGeneration;
+        if (quotaTimer !== undefined) clearTimeout(quotaTimer);
+        quotaTimer = undefined;
+        const next = await refresh();
+        if (generation !== refreshGeneration) return;
+        quotaTimer = setTimeout(
+            () => void refreshAndSchedule().catch(() => {}),
+            quotaRefreshDelay(next),
+        );
     }
 
     function paintFooter(ctx: ExtensionContext): void {
@@ -399,7 +487,11 @@ export default function (pi: ExtensionAPI) {
                 if (await updateRepo(dirname(resolve(ctx.cwd, path)))) break;
             }
         }
-        await refresh();
+        await refreshAndSchedule();
+    });
+
+    pi.on("session_shutdown", () => {
+        stopQuotaRefresh();
     });
 
     pi.on("model_select", (_event, ctx) => {
@@ -444,6 +536,6 @@ export default function (pi: ExtensionAPI) {
     pi.on("turn_start", (_event, ctx) => {
         ctxRef = ctx;
         requestRender?.();
-        refresh().catch(() => {});
+        refreshAndSchedule().catch(() => {});
     });
 }

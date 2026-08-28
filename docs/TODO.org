@@ -334,3 +334,15 @@ Cookbook tension (stash =20260827T175527=): we previously said =just wt= owns wo
 ** Review disposition
 
 LOGBOOK keeps the full Claude and Codex notes. Their accepted corrections are the plan above, not a second copy.
+
+* DONE Recover stale provider quota status                           :pi:tui:
+CLOSED: [2026-08-28 Fri 10:06]
+:PROPERTIES:
+:ID:       20260828T080140Z-7f1839
+:CREATED:  [2026-08-28 Fri 10:01]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-28 Fri 10:06] \\
+  Added session polling, single-flight refresh, transient last-good retention, and focused tests.
+:END:
+Poll provider quota while idle and prevent overlapping refreshes from leaving the footer gray after transient failures.

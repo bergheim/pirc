@@ -10,7 +10,7 @@ export function hhmmss(t: number): string {
 }
 
 export const CLOCK_LIVE = "󰔛";
-export const CLOCK_DONE = "󰄬";
+export const CLOCK_DONE = "󰗡";
 
 export function stampText(
     data: ClockData | undefined,

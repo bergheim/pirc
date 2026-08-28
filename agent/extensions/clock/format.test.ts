@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatDuration } from "./format.ts";
+import { formatDuration, stampText } from "./format.ts";
 
 test("formatDuration buckets", () => {
     assert.equal(formatDuration(850), "850ms");
@@ -11,4 +11,11 @@ test("formatDuration buckets", () => {
     assert.equal(formatDuration(3_600_000), "1h");
     assert.equal(formatDuration(-1), "");
     assert.equal(formatDuration(Number.NaN), "");
+});
+
+test("stampText live vs settled duration", () => {
+    assert.equal(stampText({ live: true }, 12_000), "took 12s");
+    assert.equal(stampText({ live: true }), "");
+    assert.equal(stampText({ d: 12_000 }, 99_000), "took 12s");
+    assert.match(stampText({ t: Date.UTC(2026, 0, 1, 12, 0, 0), d: 12_000 }), /took 12s$/);
 });

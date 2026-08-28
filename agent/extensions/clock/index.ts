@@ -1,41 +1,26 @@
 /**
  * Dim right-aligned HH:mm:ss after each TUI user/assistant message.
- * After the run settles, a second line shows wall time (tools + retries).
- * Custom entries stay out of model context. Reload keeps them.
+ * During a run, a live `took` line ticks on TUI redraws (working indicator).
+ * After settle, a final wall-time line. Custom entries stay out of model context.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { CLOCK_TYPE, type ClockData } from "./entry.ts";
-import { formatDuration } from "./format.ts";
-
-function stampText(data: ClockData | undefined): string {
-    const parts: string[] = [];
-    if (Number.isFinite(data?.t)) parts.push(hhmmss(data.t as number));
-    if (Number.isFinite(data?.d)) {
-        const dur = formatDuration(data.d as number);
-        if (dur) parts.push(`took ${dur}`);
-    }
-    return parts.join(" · ");
-}
-
-function hhmmss(t: number): string {
-    return new Date(t).toLocaleTimeString("en-GB", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-    });
-}
+import { stampText } from "./format.ts";
 
 export default function (pi: ExtensionAPI): void {
     let runStart: number | undefined;
 
     pi.registerEntryRenderer<ClockData>(CLOCK_TYPE, (entry, _opts, theme) => {
-        const raw = stampText(entry.data);
-        if (!raw) return undefined;
-        const text = theme.fg("dim", raw);
         return {
             render(width: number) {
+                const liveMs =
+                    entry.data?.live && runStart !== undefined
+                        ? performance.now() - runStart
+                        : undefined;
+                const raw = stampText(entry.data, liveMs);
+                if (!raw) return [];
+                const text = theme.fg("dim", raw);
                 return [
                     " ".repeat(Math.max(0, width - visibleWidth(text))) + text,
                 ];
@@ -52,7 +37,10 @@ export default function (pi: ExtensionAPI): void {
     pi.on("session_shutdown", reset);
 
     pi.on("agent_start", (_event, ctx) => {
-        if (ctx.mode === "tui") runStart ??= performance.now();
+        if (ctx.mode !== "tui") return;
+        const first = runStart === undefined;
+        runStart ??= performance.now();
+        if (first) pi.appendEntry<ClockData>(CLOCK_TYPE, { live: true });
     });
 
     pi.on("message_end", (event, ctx) => {
@@ -68,6 +56,8 @@ export default function (pi: ExtensionAPI): void {
         const startedAt = runStart;
         runStart = undefined;
         if (ctx.mode !== "tui" || startedAt === undefined) return;
-        pi.appendEntry<ClockData>(CLOCK_TYPE, { d: performance.now() - startedAt });
+        pi.appendEntry<ClockData>(CLOCK_TYPE, {
+            d: performance.now() - startedAt,
+        });
     });
 }

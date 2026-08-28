@@ -158,11 +158,17 @@ Footer shows only the active provider quota plus local wall-clock reset and rema
   - [nit] Cap/sanitize slug (length, no leading -, no .., no trailing .lock). Free-text focus becomes a branch name that may be pushed.
   - [nit] herdr-agent-state already reports session path; clone session id is likely queryable.
 :END:
-Spike: one command clones the *current* Pi conversation into a new git worktree and a new Herdr workspace, without mutating the source pane.
+** TL;DR — how to do it
 
-This is host-only, clean-tree-only, and must not run against the live =~/.pi= config checkout.
-
-Claude and Codex reviews are in the LOGBOOK. Decisions below already include them.
+- Add =/herdr-fork [focus instructions]=. Never switch, compact, close, or change cwd in the source pane.
+- Validate Herdr, an idle persisted Pi session at its last persisted leaf, and a clean host-visible repo; reject =~/.pi= and containers.
+- Capture the source session path and commit OID.
+- Run =herdr worktree create --cwd <root> --branch <branch> --base <oid> --no-focus=.
+- Parse Herdr's result, validate the new pane cwd, and wait for an interactive shell.
+- Start =pi --fork <source-session>= there via =herdr agent start=.
+- Wait for =idle= or =blocked= with a timeout; surface the new-project trust prompt rather than typing through it.
+- If focus text exists, compact only the clone. Keep this manual until =agent prompt= is proven and verify a clone compaction entry afterward.
+- Report the new branch, path, workspace, pane, session, and recovery commands. Never auto-delete a successful checkout.
 
 ** UX
 

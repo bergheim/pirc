@@ -153,6 +153,11 @@ test("agentNameFor fits herdr's 32-char name (no doubled oid)", () => {
     assert.match(name, HERDR_AGENT);
     assert.equal(name.length, 32);
 
+    assert.equal(
+        agentNameFor("focus-on-json", "d309791"),
+        "pi-fork-focus-on-json-d309791",
+    );
+
     const long = agentNameFor("x".repeat(80), "d309791");
     assert.match(long, HERDR_AGENT);
     assert.ok(long.length <= 32);

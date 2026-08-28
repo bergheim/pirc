@@ -73,13 +73,19 @@ export function branchFor(slug: string): string {
     return `feat/herdr-fork-${slug}`;
 }
 
-/** Herdr: /^[a-z][a-z0-9_-]{0,31}$/. Keep uniq when the slug overflows. */
+/** Herdr: /^[a-z][a-z0-9_-]{0,31}$/. Keep uniq unless the slug already ends with it. */
 export function agentNameFor(slug: string, uniq = ""): string {
-    const raw = slugify(`pi-fork-${slug}`) || "pi-fork";
-    if (raw.length <= MAX_AGENT_NAME) return raw;
-    const suffix = (slugify(uniq) || "x").slice(0, 7);
+    let base = slugify(`pi-fork-${slug}`) || "pi-fork";
+    const suffix = slugify(uniq).slice(0, 7);
+    if (!suffix) {
+        return base.slice(0, MAX_AGENT_NAME).replace(/-+$/g, "") || "pi-fork";
+    }
+    if (base.endsWith(`-${suffix}`)) {
+        if (base.length <= MAX_AGENT_NAME) return base;
+        base = base.slice(0, -(suffix.length + 1));
+    }
     const head =
-        raw.slice(0, MAX_AGENT_NAME - suffix.length - 1).replace(/-+$/g, "") ||
+        base.slice(0, MAX_AGENT_NAME - suffix.length - 1).replace(/-+$/g, "") ||
         "pi";
     return `${head}-${suffix}`;
 }

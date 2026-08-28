@@ -33,15 +33,15 @@ const MAX_SLUG = 40;
 export function validateFocus(
     raw: string,
 ): { ok: true; focus: string } | { ok: false; error: string } {
-    const focus = raw.trim();
-    if (!focus) return { ok: true, focus: "" };
     // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
-    if (/[\u0000-\u001f\u007f]/.test(focus)) {
+    if (/[\u0000-\u001f\u007f]/.test(raw)) {
         return {
             ok: false,
             error: "Focus text must not contain newlines or control characters.",
         };
     }
+    const focus = raw.trim();
+    if (!focus) return { ok: true, focus: "" };
     if (focus.startsWith("/")) {
         return {
             ok: false,
@@ -264,6 +264,12 @@ export type RecoveryInput = {
     paneStillShell: boolean;
 };
 
+/** POSIX single-quote, only when the token needs it. */
+export function shellQuote(arg: string): string {
+    if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(arg)) return arg;
+    return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
 /** Never auto-remove: print what the operator can run instead. */
 export function recoveryReport(info: RecoveryInput): string {
     const lines: string[] = ["The checkout was kept. Recovery:"];
@@ -280,20 +286,20 @@ export function recoveryReport(info: RecoveryInput): string {
         lines.push(
             "",
             "Pane is still a shell. Retry the agent with:",
-            `  herdr agent start ${info.agentName} --kind pi --pane ${info.paneId} -- --fork ${info.sessionFile}`,
+            `  herdr agent start ${shellQuote(info.agentName)} --kind pi --pane ${shellQuote(info.paneId)} -- --fork ${shellQuote(info.sessionFile)}`,
         );
     } else if (info.paneId) {
         lines.push(
             "",
             "Pi may already own that pane - inspect before restarting anything:",
-            `  herdr pane get ${info.paneId}`,
+            `  herdr pane get ${shellQuote(info.paneId)}`,
         );
     }
     if (info.workspaceId) {
         lines.push(
             "",
             "Discard the checkout only if you want it gone:",
-            `  herdr worktree remove --workspace ${info.workspaceId}`,
+            `  herdr worktree remove --workspace ${shellQuote(info.workspaceId)}`,
         );
     }
     return lines.join("\n");
@@ -382,6 +388,17 @@ export async function herdrFork(
     if (version.status !== 0) {
         return fail(
             `The herdr CLI is not runnable on PATH.\n${rawDetail(version)}`,
+        );
+    }
+    // --version only proves the binary exists; this proves the server answers.
+    const selfPane = await deps.run("herdr", [
+        "pane",
+        "get",
+        deps.env.HERDR_PANE_ID,
+    ]);
+    if (selfPane.status !== 0 || !parsePaneInfo(selfPane)) {
+        return fail(
+            `The Herdr server did not return pane ${deps.env.HERDR_PANE_ID}; it is unreachable.\n${rawDetail(selfPane)}`,
         );
     }
 

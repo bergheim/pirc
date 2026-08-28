@@ -12,6 +12,7 @@ import {
     type RunResult,
     recoveryReport,
     salvageIds,
+    shellQuote,
     slugify,
     validateFocus,
 } from "./logic.ts";
@@ -61,6 +62,7 @@ function makeDeps(
         "git rev-parse HEAD": ok(`${OID}\n`),
         "herdr --version": ok("herdr 1.0\n"),
         "herdr worktree create": ok(createEnvelope()),
+        "herdr pane get w8:p4": ok(paneEnvelope({ pane_id: "w8:p4" })),
         "herdr pane get": ok(
             paneEnvelope({ pane_id: "w9:p1", cwd: CHECKOUT, agent: null }),
         ),
@@ -160,6 +162,48 @@ test("validateFocus rejects control characters and a leading slash", () => {
     assert.equal(slash.ok, false);
     assert.match(slash.ok ? "" : slash.error, /must not start with/);
     assert.equal(validateFocus("bell\u0007here").ok, false);
+});
+
+test("validateFocus checks control characters before trimming", () => {
+    for (const raw of ["\nhello", "hello\n", "  \n  ", "\thello"]) {
+        assert.equal(validateFocus(raw).ok, false, JSON.stringify(raw));
+    }
+    assert.deepEqual(validateFocus("   "), { ok: true, focus: "" });
+});
+
+test("unreachable herdr server is refused before any git call", async () => {
+    for (const response of [bad("connection refused"), ok("not json")]) {
+        const calls: Calls = [];
+        const outcome = await herdrFork(
+            "",
+            makeDeps({
+                calls,
+                responses: { "herdr pane get w8:p4": response },
+            }),
+        );
+        assert.equal(outcome.ok, false);
+        assert.match(outcome.message, /unreachable/);
+        assert.ok(!calls.some((c) => c[0] === "git"));
+        assert.ok(!calls.some((c) => c[1] === "worktree"));
+    }
+});
+
+test("recovery commands shell-quote paths with spaces", () => {
+    assert.equal(
+        shellQuote("/sessions/source.jsonl"),
+        "/sessions/source.jsonl",
+    );
+    assert.equal(shellQuote("/a b/c'd"), `'/a b/c'\\''d'`);
+    const report = recoveryReport({
+        workspaceId: "my ws",
+        paneId: "w9:p1",
+        path: "/tmp/wt",
+        agentName: "pi-fork-demo",
+        sessionFile: "/sessions/my project/s.jsonl",
+        paneStillShell: true,
+    });
+    assert.match(report, /--fork '\/sessions\/my project\/s\.jsonl'$/m);
+    assert.match(report, /herdr worktree remove --workspace 'my ws'/);
 });
 
 test("parseWorktreeCreate reads a success envelope", () => {

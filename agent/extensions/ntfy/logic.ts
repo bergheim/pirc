@@ -19,9 +19,9 @@ export function formatElapsed(seconds: number): string {
 
 export function parseThreshold(raw: string | undefined): number {
     const s = raw?.trim();
-    if (!s) return 60;
+    if (!s) return 300;
     const n = Number(s);
-    return Number.isFinite(n) && n >= 0 ? n : 60;
+    return Number.isFinite(n) && n >= 0 ? n : 300;
 }
 
 export function hostTopic(raw: string | undefined): string {

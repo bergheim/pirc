@@ -1,5 +1,5 @@
 /**
- * TUI settle: CSI 5 t + BEL (WM urgent). ntfy if the turn is slow, or on quit.
+ * TUI settle: CSI 5 t + BEL (WM urgent). ntfy if the turn is >5m, or on quit.
  * Jolo: AGENT=pi notify. Host: POST $NTFY_SERVER / $PI_NTFY_TOPIC (default pi).
  */
 import { spawn, spawnSync } from "node:child_process";

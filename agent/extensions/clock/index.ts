@@ -5,11 +5,16 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { CLOCK_TYPE, type ClockData } from "./entry.ts";
+import {
+    CLOCK_TYPE,
+    clockDataForMessage,
+    type ClockData,
+} from "./entry.ts";
 import { stampText } from "./format.ts";
 
 export default function (pi: ExtensionAPI): void {
     let runStart: number | undefined;
+    let liveEntryPending = false;
 
     pi.registerEntryRenderer<ClockData>(CLOCK_TYPE, (entry, _opts, theme) => {
         return {
@@ -31,6 +36,7 @@ export default function (pi: ExtensionAPI): void {
 
     const reset = () => {
         runStart = undefined;
+        liveEntryPending = false;
     };
 
     pi.on("session_start", reset);
@@ -38,9 +44,10 @@ export default function (pi: ExtensionAPI): void {
 
     pi.on("agent_start", (_event, ctx) => {
         if (ctx.mode !== "tui") return;
-        const first = runStart === undefined;
-        runStart ??= performance.now();
-        if (first) pi.appendEntry<ClockData>(CLOCK_TYPE, { live: true });
+        if (runStart === undefined) {
+            runStart = performance.now();
+            liveEntryPending = true;
+        }
     });
 
     pi.on("message_end", (event, ctx) => {
@@ -48,13 +55,19 @@ export default function (pi: ExtensionAPI): void {
         const { role, timestamp: t } = event.message;
         if (role !== "user" && role !== "assistant") return;
         if (!Number.isFinite(t)) return;
-        // message is persisted after this handler; append now and the clock sits above it
-        setTimeout(() => pi.appendEntry<ClockData>(CLOCK_TYPE, { t }), 0);
+        const next = clockDataForMessage(role, t, liveEntryPending);
+        liveEntryPending = next.liveEntryPending;
+        // Persistence happens after message_end; defer so this entry stays below it.
+        setTimeout(
+            () => pi.appendEntry<ClockData>(CLOCK_TYPE, next.data),
+            0,
+        );
     });
 
     pi.on("agent_settled", (_event, ctx) => {
         const startedAt = runStart;
         runStart = undefined;
+        liveEntryPending = false;
         if (ctx.mode !== "tui" || startedAt === undefined) return;
         pi.appendEntry<ClockData>(CLOCK_TYPE, {
             d: performance.now() - startedAt,

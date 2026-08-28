@@ -346,3 +346,15 @@ CLOSED: [2026-08-28 Fri 10:06]
   Added session polling, single-flight refresh, transient last-good retention, and focused tests.
 :END:
 Poll provider quota while idle and prevent overlapping refreshes from leaving the footer gray after transient failures.
+
+* DONE Move reply clock below user message                           :pi:tui:
+CLOSED: [2026-08-28 Fri 10:16]
+:PROPERTIES:
+:ID:       20260828T081312Z-75426c
+:CREATED:  [2026-08-28 Fri 10:13]
+:END:
+:LOGBOOK:
+- Note taken on [2026-08-28 Fri 10:16] \\
+  Deferred the live clock until after the first user message; focused clock tests pass.
+:END:
+Insert the live reply clock after the colored user-message box instead of before it.

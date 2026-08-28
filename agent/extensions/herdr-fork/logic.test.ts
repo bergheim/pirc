@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    agentNameFor,
     branchFor,
     type ForkDeps,
     forkSlug,
@@ -141,6 +142,21 @@ test("slugify caps length and strips unsafe characters", () => {
     assert.ok(slugify("x".repeat(200)).length <= 40);
     assert.equal(forkSlug("", "2026-08-28-abc1234"), "2026-08-28-abc1234");
     assert.ok(isSafeRef(branchFor(forkSlug("a b", "seed"))));
+});
+
+const HERDR_AGENT = /^[a-z][a-z0-9_-]{0,31}$/;
+
+test("agentNameFor fits herdr's 32-char name (no doubled oid)", () => {
+    const seed = "2026-08-28T10:38-d309791";
+    const name = agentNameFor(forkSlug("", seed), "d309791");
+    assert.equal(name, "pi-fork-2026-08-28t10-38-d309791");
+    assert.match(name, HERDR_AGENT);
+    assert.equal(name.length, 32);
+
+    const long = agentNameFor("x".repeat(80), "d309791");
+    assert.match(long, HERDR_AGENT);
+    assert.ok(long.length <= 32);
+    assert.ok(long.endsWith("-d309791"));
 });
 
 test("isSafeRef rejects illegal git refs", () => {

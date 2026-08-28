@@ -1,7 +1,7 @@
 /**
  * Dim right-aligned HH:mm:ss after each TUI user/assistant message.
  * During a run, a live `󰔛 12s` ticks on TUI redraws (working indicator).
- * After settle, `󰄬 took 12s`. Custom entries stay out of model context.
+ * After settle, `󰄬 12s`. Custom entries stay out of model context.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";

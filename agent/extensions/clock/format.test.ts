@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-    CLOCK_DONE,
-    CLOCK_LIVE,
-    formatDuration,
-    stampText,
-} from "./format.ts";
+import { CLOCK_DONE, CLOCK_LIVE, formatDuration, stampText } from "./format.ts";
 
 test("formatDuration buckets", () => {
     assert.equal(formatDuration(850), "850ms");
@@ -21,9 +16,11 @@ test("formatDuration buckets", () => {
 test("stampText live vs settled duration", () => {
     assert.equal(stampText({ live: true }, 12_000), `${CLOCK_LIVE} 12s`);
     assert.equal(stampText({ live: true }), "");
-    assert.equal(stampText({ d: 12_000 }, 99_000), `${CLOCK_DONE} took 12s`);
-    assert.match(
-        stampText({ t: Date.UTC(2026, 0, 1, 12, 0, 0), d: 12_000 }),
-        new RegExp(`${CLOCK_DONE} took 12s$`),
+    assert.equal(stampText({ d: 12_000 }, 99_000), `${CLOCK_DONE} 12s`);
+    assert.ok(
+        stampText({
+            t: Date.UTC(2026, 0, 1, 12, 0, 0),
+            d: 12_000,
+        }).endsWith(`${CLOCK_DONE} 12s`),
     );
 });

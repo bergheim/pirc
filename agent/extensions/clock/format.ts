@@ -23,7 +23,9 @@ export function stampText(
     if (Number.isFinite(durMs)) {
         const dur = formatDuration(durMs as number);
         if (dur) {
-            parts.push(settled ? `${CLOCK_DONE} took ${dur}` : `${CLOCK_LIVE} ${dur}`);
+            parts.push(
+                `${settled ? CLOCK_DONE : CLOCK_LIVE} ${dur}`,
+            );
         }
     }
     return parts.join(" · ");

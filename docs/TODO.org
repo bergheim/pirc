@@ -160,15 +160,15 @@ Footer shows only the active provider quota plus local wall-clock reset and rema
 :END:
 ** TL;DR — how to do it
 
-- Add =/herdr-fork [focus instructions]=. Never switch, compact, close, or change cwd in the source pane.
-- Validate Herdr, an idle persisted Pi session at its last persisted leaf, and a clean host-visible repo; reject =~/.pi= and containers.
-- Capture the source session path and commit OID.
-- Run =herdr worktree create --cwd <root> --branch <branch> --base <oid> --no-focus=.
-- Parse Herdr's result, validate the new pane cwd, and wait for an interactive shell.
-- Start =pi --fork <source-session>= there via =herdr agent start=.
-- Wait for =idle= or =blocked= with a timeout; surface the new-project trust prompt rather than typing through it.
-- If focus text exists, compact only the clone. Keep this manual until =agent prompt= is proven and verify a clone compaction entry afterward.
-- Report the new branch, path, workspace, pane, session, and recovery commands. Never auto-delete a successful checkout.
+1. Add =/herdr-fork [focus instructions]=. Never switch, compact, close, or change cwd in the source pane.
+2. Refuse unless we are *inside a Herdr pane* (=HERDR_ENV=1=, socket and pane id set, =herdr= CLI can reach the server), this Pi is idle with a session file on disk at the last persisted leaf, and the project is a clean host-visible git repo. Reject =~/.pi= and containers.
+3. Capture the source session path and the current commit hash (=git rev-parse HEAD=). That hash is the create =--base=, so the worktree is not racing a moving =HEAD=.
+4. Run =herdr worktree create --cwd <root> --branch <branch> --base <oid> --no-focus=.
+5. Parse Herdr's result, validate the new pane cwd, and wait for an interactive shell.
+6. Start =pi --fork <source-session>= there via =herdr agent start=.
+7. Wait for =idle= or =blocked= with a timeout. A brand-new checkout is untrusted: Pi shows its project-trust prompt. Tell the operator to accept it in that pane; do not send keys or =agent prompt= through it.
+8. If focus text exists, compact only the clone. Keep this manual until =agent prompt= is proven and verify a clone compaction entry afterward.
+9. Report the new branch, path, workspace, pane, session, and recovery commands. Never auto-delete a successful checkout.
 
 ** UX
 

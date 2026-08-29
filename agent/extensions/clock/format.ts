@@ -9,16 +9,15 @@ export function hhmmss(t: number): string {
     });
 }
 
-export function stampText(
-    data: ClockData | undefined,
-    liveMs?: number,
-): string {
+export const CLOCK_LIVE = "󰔛";
+export const CLOCK_DONE = "󰗡";
+
+export function stampText(data: ClockData | undefined): string {
     const parts: string[] = [];
     if (Number.isFinite(data?.t)) parts.push(hhmmss(data.t as number));
-    const durMs = Number.isFinite(data?.d) ? (data.d as number) : liveMs;
-    if (Number.isFinite(durMs)) {
-        const dur = formatDuration(durMs as number);
-        if (dur) parts.push(`took ${dur}`);
+    if (Number.isFinite(data?.d)) {
+        const dur = formatDuration(data.d as number);
+        if (dur) parts.push(`${CLOCK_DONE} ${dur}`);
     }
     return parts.join(" · ");
 }

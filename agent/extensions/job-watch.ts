@@ -1,6 +1,7 @@
-import type {
-    ExtensionAPI,
-    ExtensionContext,
+import {
+    type ExtensionAPI,
+    type ExtensionContext,
+    truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -36,6 +37,11 @@ interface Watch {
 // Same timer glyph the clock extension uses; duplicated to keep the extensions independent.
 const TIMER_ICON = "󰔛";
 
+// A wake message rides straight into context, so a job that returns a huge blob
+// gets clipped well below the 50KB tool-output ceiling.
+const MAX_RESULT_BYTES = 4_000;
+const MAX_RESULT_LINES = 40;
+
 const STATES = new Set<JobState>(["queued", "running", "done", "error"]);
 
 function parseStatus(stdout: string, expectedId: string): JobStatus {
@@ -56,6 +62,17 @@ function parseStatus(stdout: string, expectedId: string): JobStatus {
         throw new Error("probe output requires a label and valid state");
     }
     return status as unknown as JobStatus;
+}
+
+function resultText(status: JobStatus): string {
+    const raw = JSON.stringify(status.result ?? status.message ?? null);
+    const clipped = truncateHead(raw, {
+        maxBytes: MAX_RESULT_BYTES,
+        maxLines: MAX_RESULT_LINES,
+    });
+    return clipped.truncated
+        ? `${clipped.content}\n[result truncated; re-run the probe for the full value]`
+        : clipped.content;
 }
 
 function display(status: JobStatus): string {
@@ -87,6 +104,16 @@ export default function jobWatch(pi: ExtensionAPI) {
             .map((watch) => watch.line)
             .filter((line): line is string => line !== undefined);
         ctx.ui.setWidget(WIDGET_KEY, lines.length ? lines : undefined);
+    }
+
+    function stopWatch(id: string, ctx: ExtensionContext): boolean {
+        const watch = watches.get(id);
+        if (!watch) return false;
+        watch.terminal = true;
+        if (watch.timer) clearInterval(watch.timer);
+        watches.delete(id);
+        paintWidget(ctx);
+        return true;
     }
 
     async function poll(watch: Watch, initial = false): Promise<void> {
@@ -124,7 +151,7 @@ export default function jobWatch(pi: ExtensionAPI) {
                         display: true,
                         content:
                             `Watched job ${status.state}: ${status.label}\n` +
-                            `Result: ${JSON.stringify(status.result ?? status.message ?? null)}\n` +
+                            `Result: ${resultText(status)}\n` +
                             "Report this immediately. Do not relaunch the job. Obey any human judgment gate.",
                         details: status,
                     },
@@ -217,6 +244,52 @@ export default function jobWatch(pi: ExtensionAPI) {
                     terminal: watch.terminal,
                 },
             };
+        },
+    });
+
+    pi.registerTool({
+        name: "unwatch_job",
+        label: "Unwatch Job",
+        description:
+            "Stop watching a job. The underlying job keeps running; only monitoring stops.",
+        parameters: Type.Object({ id: Type.String() }),
+        async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+            const stopped = stopWatch(params.id, ctx);
+            return {
+                content: [
+                    {
+                        type: "text" as const,
+                        text: stopped
+                            ? `Stopped watching ${params.id}; the job keeps running`
+                            : `No watch for ${params.id}`,
+                    },
+                ],
+                details: { id: params.id, stopped },
+            };
+        },
+    });
+
+    pi.registerCommand("unwatch", {
+        description: "Stop watching a job without stopping the job",
+        getArgumentCompletions: (prefix: string) => {
+            const items = [...watches.values()]
+                .map((watch) => ({ value: watch.id, label: watch.label }))
+                .filter((item) => item.value.startsWith(prefix));
+            return items.length > 0 ? items : null;
+        },
+        handler: async (args, ctx) => {
+            const id = args.trim();
+            if (!ctx.hasUI) return;
+            if (!id) {
+                ctx.ui.notify("Usage: /unwatch <job id>", "warning");
+                return;
+            }
+            ctx.ui.notify(
+                stopWatch(id, ctx)
+                    ? `Stopped watching ${id}; the job keeps running`
+                    : `No watch for ${id}`,
+                "info",
+            );
         },
     });
 

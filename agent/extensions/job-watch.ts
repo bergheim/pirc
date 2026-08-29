@@ -103,14 +103,36 @@ const WIDGET_KEY = "job-watch";
 export default function jobWatch(pi: ExtensionAPI) {
     const watches = new Map<string, Watch>();
 
-    // The footer is unusable here: an extension that calls setFooter replaces it
-    // wholesale and drops every extension status, so progress goes in a widget.
-    function paintWidget(ctx: ExtensionContext): void {
-        if (!ctx.hasUI) return;
-        const lines = [...watches.values()]
+    let requestRender: (() => void) | undefined;
+
+    function widgetLines(): string[] {
+        return [...watches.values()]
             .map((watch) => watch.line)
             .filter((line): line is string => line !== undefined);
-        ctx.ui.setWidget(WIDGET_KEY, lines.length ? lines : undefined);
+    }
+
+    // The footer is unusable here: an extension that calls setFooter replaces it
+    // wholesale and drops every extension status, so progress goes in a widget.
+    // The widget renders from the live map and asks for a repaint on every poll,
+    // because an idle agent draws no frames on its own.
+    function paintWidget(ctx: ExtensionContext): void {
+        if (!ctx.hasUI) return;
+        if (widgetLines().length === 0) {
+            ctx.ui.setWidget(WIDGET_KEY, undefined);
+            requestRender = undefined;
+            return;
+        }
+        if (!requestRender) {
+            ctx.ui.setWidget(WIDGET_KEY, (tui) => {
+                requestRender = () => tui.requestRender();
+                return {
+                    render: () => widgetLines(),
+                    invalidate: () => {},
+                };
+            });
+            return;
+        }
+        requestRender();
     }
 
     function stopWatch(id: string, ctx: ExtensionContext): boolean {

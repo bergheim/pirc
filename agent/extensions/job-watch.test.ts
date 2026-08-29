@@ -33,15 +33,42 @@ globalThis.setInterval = ((fn: () => void) =>
 globalThis.clearInterval = ((id: number) =>
     cleared.push(id)) as unknown as typeof clearInterval;
 
+interface WidgetComponent {
+    render: (width: number) => string[];
+    invalidate: () => void;
+}
+
+type WidgetValue =
+    | undefined
+    | ((tui: { requestRender: () => void }) => WidgetComponent);
+
 function fakeUi() {
-    const widgets: Array<[string, unknown]> = [];
+    const widgets: Array<[string, WidgetValue]> = [];
+    let renders = 0;
+    let component: WidgetComponent | undefined;
+    const tui = {
+        requestRender: () => {
+            renders += 1;
+        },
+    };
     return {
         widgets,
-        lastWidget: () => widgets[widgets.length - 1],
+        renderCount: () => renders,
+        // Mirrors the TUI: the factory is invoked once, then the same component
+        // is re-rendered whenever a repaint is requested.
+        lines(): string[] | undefined {
+            const last = widgets[widgets.length - 1];
+            if (!last) return undefined;
+            const factory = last[1];
+            if (!factory) return undefined;
+            component ??= factory(tui);
+            return component.render(80);
+        },
         ctx: {
             hasUI: true,
             ui: {
-                setWidget(key: string, value: unknown) {
+                setWidget(key: string, value: WidgetValue) {
+                    if (!value) component = undefined;
                     widgets.push([key, value]);
                 },
                 notify() {},
@@ -133,10 +160,7 @@ test("progress reaches the widget and completion wakes the agent once", async ()
     const ui = fakeUi();
     await startWatch(h, ui);
 
-    assert.deepEqual(ui.widgets[0], [
-        "job-watch",
-        ["Fake job · running · 󰔛 1/2"],
-    ]);
+    assert.deepEqual(ui.lines(), ["Fake job · running · 󰔛 1/2"]);
 
     await h.tick();
     await h.tick();
@@ -149,12 +173,31 @@ test("progress reaches the widget and completion wakes the agent once", async ()
         deliverAs: "followUp",
     });
     assert.match(String(wake?.content), /Watched job done: Fake job/);
-    assert.equal(
-        ui.lastWidget()?.[1],
-        undefined,
-        "the widget clears at terminal",
-    );
+    assert.equal(ui.lines(), undefined, "the widget clears at terminal");
     assert.deepEqual(h.cleared(), [1]);
+});
+
+test("later progress asks the TUI to repaint", async () => {
+    const later = JSON.stringify({
+        id: "run-1",
+        label: "Fake job",
+        state: "running",
+        current: 2,
+        total: 2,
+    });
+    const h = harness([running, later]);
+    const ui = fakeUi();
+    await startWatch(h, ui);
+    ui.lines(); // the TUI builds the component on its first paint
+
+    assert.equal(ui.renderCount(), 0);
+    await h.tick();
+    assert.equal(
+        ui.renderCount(),
+        1,
+        "an idle agent draws no frames on its own",
+    );
+    assert.deepEqual(ui.lines(), ["Fake job · running · 󰔛 2/2"]);
 });
 
 test("oversized results are truncated before reaching context", async () => {
@@ -180,7 +223,7 @@ test("unwatch_job stops monitoring and leaves the job alone", async () => {
         .execute("call-2", { id: "run-1" }, undefined, undefined, ui.ctx);
     assert.deepEqual(stopped.details, { id: "run-1", stopped: true });
     assert.deepEqual(h.cleared(), [1], "the poll timer is cleared");
-    assert.equal(ui.lastWidget()?.[1], undefined);
+    assert.equal(ui.lines(), undefined);
 
     const execsBefore = h.execCount();
     await h.tick();

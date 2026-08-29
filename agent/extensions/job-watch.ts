@@ -1,8 +1,15 @@
 import {
+    DynamicBorder,
     type ExtensionAPI,
     type ExtensionContext,
     truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import {
+    Container,
+    type SelectItem,
+    SelectList,
+    Text,
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 type JobState = "queued" | "running" | "done" | "error";
@@ -271,19 +278,68 @@ export default function jobWatch(pi: ExtensionAPI) {
 
     pi.registerCommand("unwatch", {
         description: "Stop watching a job without stopping the job",
-        getArgumentCompletions: (prefix: string) => {
-            const items = [...watches.values()]
-                .map((watch) => ({ value: watch.id, label: watch.label }))
-                .filter((item) => item.value.startsWith(prefix));
-            return items.length > 0 ? items : null;
-        },
-        handler: async (args, ctx) => {
-            const id = args.trim();
+        handler: async (_args, ctx) => {
             if (!ctx.hasUI) return;
-            if (!id) {
-                ctx.ui.notify("Usage: /unwatch <job id>", "warning");
+            const items: SelectItem[] = [...watches.values()].map((watch) => ({
+                value: watch.id,
+                label: watch.label,
+                description: watch.line ?? watch.id,
+            }));
+            if (items.length === 0) {
+                ctx.ui.notify("No watched jobs", "info");
                 return;
             }
+
+            const id = await ctx.ui.custom<string | null>(
+                (tui, theme, _keybindings, done) => {
+                    const container = new Container();
+                    const border = () =>
+                        new DynamicBorder((s: string) => theme.fg("accent", s));
+                    container.addChild(border());
+                    container.addChild(
+                        new Text(
+                            theme.fg("accent", theme.bold("Stop watching")),
+                            1,
+                            0,
+                        ),
+                    );
+                    const list = new SelectList(
+                        items,
+                        Math.min(items.length, 10),
+                        {
+                            selectedPrefix: (t: string) =>
+                                theme.fg("accent", t),
+                            selectedText: (t: string) => theme.fg("accent", t),
+                            description: (t: string) => theme.fg("muted", t),
+                            scrollInfo: (t: string) => theme.fg("dim", t),
+                            noMatch: (t: string) => theme.fg("warning", t),
+                        },
+                    );
+                    list.onSelect = (item) => done(item.value);
+                    list.onCancel = () => done(null);
+                    container.addChild(list);
+                    container.addChild(
+                        new Text(
+                            theme.fg(
+                                "dim",
+                                "the job keeps running; only monitoring stops",
+                            ),
+                            1,
+                            0,
+                        ),
+                    );
+                    container.addChild(border());
+                    return {
+                        render: (width: number) => container.render(width),
+                        invalidate: () => container.invalidate(),
+                        handleInput: (data: string) => {
+                            list.handleInput(data);
+                            tui.requestRender();
+                        },
+                    };
+                },
+            );
+            if (!id) return;
             ctx.ui.notify(
                 stopWatch(id, ctx)
                     ? `Stopped watching ${id}; the job keeps running`

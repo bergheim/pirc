@@ -33,6 +33,7 @@ interface Watch {
     args: string[];
     intervalMs: number;
     timer?: ReturnType<typeof setInterval>;
+    startedAt: number;
     ctx: ExtensionContext;
     lastNoticeAt: number;
     line?: string;
@@ -43,6 +44,8 @@ interface Watch {
 
 // Same timer glyph the clock extension uses; duplicated to keep the extensions independent.
 const TIMER_ICON = "󰔛";
+
+const REPAINT_MS = 1_000;
 
 // A wake message rides straight into context, so a job that returns a huge blob
 // gets clipped well below the 50KB tool-output ceiling.
@@ -68,6 +71,8 @@ function parseStatus(stdout: string, expectedId: string): JobStatus {
     ) {
         throw new Error("probe output requires a label and valid state");
     }
+    // SAFETY: id, label and state were checked above; the optional fields are
+    // rendered through String()/JSON.stringify, so a wrong type cannot crash.
     return status as unknown as JobStatus;
 }
 
@@ -82,10 +87,17 @@ function resultText(status: JobStatus): string {
         : clipped.content;
 }
 
+function elapsedText(startedAt: number): string {
+    const seconds = Math.floor((Date.now() - startedAt) / 1_000);
+    return seconds < 60
+        ? `${seconds}s`
+        : `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, "0")}s`;
+}
+
 function display(status: JobStatus): string {
     const progress =
         status.current !== undefined && status.total !== undefined
-            ? `${TIMER_ICON} ${status.current}/${status.total}${status.unit ? ` ${status.unit}` : ""}`
+            ? `${status.current}/${status.total}${status.unit ? ` ${status.unit}` : ""}`
             : "";
     return [
         status.label,
@@ -104,11 +116,15 @@ export default function jobWatch(pi: ExtensionAPI) {
     const watches = new Map<string, Watch>();
 
     let requestRender: (() => void) | undefined;
+    let ticker: ReturnType<typeof setInterval> | undefined;
 
     function widgetLines(): string[] {
         return [...watches.values()]
-            .map((watch) => watch.line)
-            .filter((line): line is string => line !== undefined);
+            .filter((watch) => watch.line !== undefined)
+            .map(
+                (watch) =>
+                    `${watch.line} · ${TIMER_ICON} ${elapsedText(watch.startedAt)}`,
+            );
     }
 
     // The footer is unusable here: an extension that calls setFooter replaces it
@@ -120,8 +136,12 @@ export default function jobWatch(pi: ExtensionAPI) {
         if (widgetLines().length === 0) {
             ctx.ui.setWidget(WIDGET_KEY, undefined);
             requestRender = undefined;
+            if (ticker) clearInterval(ticker);
+            ticker = undefined;
             return;
         }
+        // The elapsed clock ticks between polls, so the repaint cannot ride the poll.
+        ticker ??= setInterval(() => requestRender?.(), REPAINT_MS);
         if (!requestRender) {
             ctx.ui.setWidget(WIDGET_KEY, (tui) => {
                 requestRender = () => tui.requestRender();
@@ -246,6 +266,7 @@ export default function jobWatch(pi: ExtensionAPI) {
                 program: params.program,
                 args: params.args,
                 intervalMs: (params.intervalSeconds ?? 10) * 1_000,
+                startedAt: Date.now(),
                 ctx,
                 lastNoticeAt: Date.now(),
                 failures: 0,
@@ -391,6 +412,8 @@ export default function jobWatch(pi: ExtensionAPI) {
             if (watch.timer) clearInterval(watch.timer);
         }
         watches.clear();
+        if (ticker) clearInterval(ticker);
+        ticker = undefined;
         paintWidget(ctx);
     });
 }

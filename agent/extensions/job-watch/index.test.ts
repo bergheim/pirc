@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import jobWatch from "./job-watch.ts";
+import jobWatch from "./index.ts";
 
 interface ToolResult {
     content: unknown;
@@ -26,10 +26,10 @@ interface SentMessage {
 
 // Timers are faked for the whole file: the extension arms its poll interval
 // inside execute(), not only while the factory runs.
-let timers: Array<() => void> = [];
+let timers: Array<{ fn: () => void; ms: number }> = [];
 let cleared: number[] = [];
-globalThis.setInterval = ((fn: () => void) =>
-    timers.push(fn)) as unknown as typeof setInterval;
+globalThis.setInterval = ((fn: () => void, ms: number) =>
+    timers.push({ fn, ms })) as unknown as typeof setInterval;
 globalThis.clearInterval = ((id: number) =>
     cleared.push(id)) as unknown as typeof clearInterval;
 
@@ -109,9 +109,14 @@ function harness(stdouts: string[]) {
             return tool;
         },
         tick: async () => {
-            const [fn] = timers;
-            if (!fn) throw new Error("no poll timer armed");
-            await fn();
+            const poll = timers.find((timer) => timer.ms >= 5_000);
+            if (!poll) throw new Error("no poll timer armed");
+            await poll.fn();
+        },
+        tickClock: () => {
+            const repaint = timers.find((timer) => timer.ms === 1_000);
+            if (!repaint) throw new Error("no repaint timer armed");
+            repaint.fn();
         },
         cleared: () => cleared,
         messages,
@@ -160,7 +165,7 @@ test("progress reaches the widget and completion wakes the agent once", async ()
     const ui = fakeUi();
     await startWatch(h, ui);
 
-    assert.deepEqual(ui.lines(), ["Fake job · running · 󰔛 1/2"]);
+    assert.deepEqual(ui.lines(), ["Fake job · running · 1/2 · 󰔛 0s"]);
 
     await h.tick();
     await h.tick();
@@ -174,7 +179,7 @@ test("progress reaches the widget and completion wakes the agent once", async ()
     });
     assert.match(String(wake?.content), /Watched job done: Fake job/);
     assert.equal(ui.lines(), undefined, "the widget clears at terminal");
-    assert.deepEqual(h.cleared(), [1]);
+    assert.deepEqual(h.cleared(), [2, 1], "poll and repaint timers both stop");
 });
 
 test("later progress asks the TUI to repaint", async () => {
@@ -197,7 +202,25 @@ test("later progress asks the TUI to repaint", async () => {
         1,
         "an idle agent draws no frames on its own",
     );
-    assert.deepEqual(ui.lines(), ["Fake job · running · 󰔛 2/2"]);
+    assert.deepEqual(ui.lines(), ["Fake job · running · 2/2 · 󰔛 0s"]);
+});
+
+test("the elapsed clock ticks between polls", async () => {
+    const h = harness([running]);
+    const ui = fakeUi();
+    const now = Date.now;
+    try {
+        await startWatch(h, ui);
+        ui.lines();
+
+        Date.now = () => now() + 65_000;
+        h.tickClock();
+        assert.equal(ui.renderCount(), 1, "the repaint runs without a poll");
+        assert.equal(h.execCount(), 1, "the clock never probes");
+        assert.deepEqual(ui.lines(), ["Fake job · running · 1/2 · 󰔛 1m05s"]);
+    } finally {
+        Date.now = now;
+    }
 });
 
 test("oversized results are truncated before reaching context", async () => {
@@ -222,7 +245,7 @@ test("unwatch_job stops monitoring and leaves the job alone", async () => {
         .tool("unwatch_job")
         .execute("call-2", { id: "run-1" }, undefined, undefined, ui.ctx);
     assert.deepEqual(stopped.details, { id: "run-1", stopped: true });
-    assert.deepEqual(h.cleared(), [1], "the poll timer is cleared");
+    assert.deepEqual(h.cleared(), [2, 1], "poll and repaint timers both stop");
     assert.equal(ui.lines(), undefined);
 
     const execsBefore = h.execCount();

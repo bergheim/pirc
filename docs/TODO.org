@@ -358,3 +358,17 @@ CLOSED: [2026-08-28 Fri 10:16]
   Deferred the live clock until after the first user message; focused clock tests pass.
 :END:
 Insert the live reply clock after the colored user-message box instead of before it.
+
+* DONE Fix stale stash paths in agent instructions                  :pi:docs:
+CLOSED: [2026-09-02 Wed 21:56]
+:PROPERTIES:
+:ID:       20260902T195520Z-02ded5
+:CREATED:  [2026-09-02 Wed 21:55]
+:LAST_AGENT: unknown
+:END:
+:LOGBOOK:
+- Note taken on [2026-09-02 Wed 21:56] \\
+  Corrected AGENTS.md and docs/agent-ops.md to use /home/tsb/stash.
+- Session unknown [2026-09-02 Wed 21:56]
+:END:
+Use /home/tsb/stash in this checkout, not /workspaces/stash.

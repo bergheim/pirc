@@ -7,7 +7,7 @@ Keep this file short. Recipes live in `docs/agent-ops.md`.
 ## Session Start
 
 - Read `docs/PROJECT.org` and `docs/TODO.org`.
-- Scan stash notes: `emacsclient -e '(bergheim/agent-denote-list "/workspaces/stash/notes" 15)'`. Read only notes tagged `pi` / `emacs` / `vim` that match the task.
+- Scan stash notes: `emacsclient -e '(bergheim/agent-denote-list "/home/tsb/stash/notes" 15)'`. Read only notes tagged `pi` / `emacs` / `vim` that match the task.
 - Do not create `docs/notes/` unless the discovery is repo-local (would matter after cloning this repo alone).
 - This tree is `~/.pi`. Branch in place. Do not create worktrees for this repo.
 - Treat `scratch/` as gitignored throwaway space.
@@ -17,7 +17,7 @@ Keep this file short. Recipes live in `docs/agent-ops.md`.
 
 - Experienced operator. Direct. No filler.
 - Disagree when evidence supports it.
-- Screenshot mentioned → newest `/workspaces/stash/shot-*.png`.
+- Screenshot mentioned → newest `/home/tsb/stash/shot-*.png`.
 - Non-trivial work: plan first, get explicit approval. Read/search is fine.
 
 ## Stop
@@ -50,9 +50,9 @@ Keep this file short. Recipes live in `docs/agent-ops.md`.
 ## Project Memory
 
 - `docs/PROJECT.org` is stable context. `docs/TODO.org` is the work log.
-- Repo-specific discoveries → `docs/notes` (denote filenames). Cross-project → `/workspaces/stash/notes`.
+- Repo-specific discoveries → `docs/notes` (denote filenames). Cross-project → `/home/tsb/stash/notes`.
 - Host install/deploy/config → stash, literate org with `:tangle` / `:mkdirp yes`.
-- Stash is `/workspaces/stash` here and `~/stash` on the host. Write the container path; use the host path when telling the user to run something themselves.
+- Stash is `/home/tsb/stash` here and `~/stash` on the host. Write the container path; use the host path when telling the user to run something themselves.
 - Denote: edit in place; one note = one topic; never hard-wrap prose (one line per paragraph). Link only via `bergheim/agent-denote-link`. TODO → note via `bergheim/agent-org-link-note`. Note → TODO is forbidden. Do not put `TODO.org` in `denote-directory`.
 - New custom `.org` under `docs/` uses denote names. `docs/PROJECT.org` and `docs/TODO.org` are the exceptions.
 - Agent-private memory: `.pi/MEMORY.md`.
@@ -84,7 +84,7 @@ Use `bergheim/agent-org-set-state` for state changes; never hand-edit TODO keywo
 
 ## Host and Container
 
-- Shared host state lives in `/workspaces/stash`.
+- Shared host state lives in `/home/tsb/stash`.
 - Host-only work (sudo, Tailscale, DNS, systemd) stays host-only: explain the step, record it in stash via `bergheim/agent-denote-*`.
 - Emacs is a daemon. `emacsclient --eval`. Never ask the user to run interactive Emacs.
 

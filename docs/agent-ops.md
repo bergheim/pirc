@@ -46,7 +46,7 @@ States: `TODO`, `NEXT`, `INPROGRESS`, `WAITING`, `DONE`, `CANCELLED`.
 
 ```bash
 emacsclient -e '(bergheim/agent-denote-create "docs/notes" "Title here" (quote ("kind" "topic")) "Body text.")'
-emacsclient -e '(bergheim/agent-denote-find "/workspaces/stash/notes" (quote ("pi")))'
-emacsclient -e '(bergheim/agent-denote-list "/workspaces/stash/notes" 15)'
+emacsclient -e '(bergheim/agent-denote-find "/home/tsb/stash/notes" (quote ("pi")))'
+emacsclient -e '(bergheim/agent-denote-list "/home/tsb/stash/notes" 15)'
 emacsclient -e '(bergheim/agent-denote-link "/abs/path/to/source.org" (quote ("/abs/path/to/target.org")))'
 ```

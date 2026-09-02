@@ -9,7 +9,7 @@
     "tui.altScreen.search": ["ctrl+f"],
     "tui.editor.cursorRight": ["right"],
     "tui.editor.cursorLeft": ["left"],
-    "app.tools.expand": ["ctrl+o"],
+    "app.tools.expand": [],
     "app.model.select": ["ctrl+shift+m"],
     "app.model.cycleBackward": ["shift+ctrl+p"],
     "app.model.cycleForward": ["ctrl+p"]

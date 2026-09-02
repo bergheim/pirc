@@ -10,7 +10,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { CLOCK_TYPE, type ClockData } from "./entry.ts";
-import { CLOCK_LIVE, stampText } from "./format.ts";
+import { CLOCK_LIVE, formatDuration, stampText } from "./format.ts";
 
 function rightAlign(text: string, width: number): string {
     return " ".repeat(Math.max(0, width - visibleWidth(text))) + text;
@@ -50,8 +50,9 @@ export default function (pi: ExtensionAPI): void {
         const startedAt = performance.now();
         runStart = startedAt;
         const paint = () => {
-            const elapsed = Math.floor((performance.now() - startedAt) / 1000);
-            ctx.ui.setWorkingMessage(`Working... ${CLOCK_LIVE} ${elapsed}s`);
+            const secs = Math.floor((performance.now() - startedAt) / 1000);
+            const elapsed = secs ? formatDuration(secs * 1000) : "0s";
+            ctx.ui.setWorkingMessage(`Working... ${CLOCK_LIVE} ${elapsed}`);
         };
         paint();
         ticker = setInterval(paint, 1000);

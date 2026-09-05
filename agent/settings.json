@@ -1,15 +1,16 @@
 {
-  "lastChangelogVersion": "0.84.3",
   "theme": "bergheim-ansi-light/bergheim-ansi-dark",
-  "defaultProvider": "xai",
-  "defaultModel": "grok-4.6",
+  "lastChangelogVersion": "0.84.4",
+  "defaultProvider": "claude-bridge",
+  "defaultModel": "claude-opus-5",
   "enabledModels": [
     "xai/grok-4.6",
     "claude-bridge/claude-fable-5",
     "openai-codex/gpt-5.6-sol",
     "claude-bridge/claude-opus-5",
     "openai-codex/gpt-5.6-terra",
-    "agy/gemini-3.7-flash"
+    "agy/gemini-3.7-flash",
+    "llama/bot-fast"
   ],
   "npmCommand": [
     "pnpm",
@@ -36,9 +37,9 @@
     "git:github.com/bergheim/pi-xmpp",
     "npm:@upstash/context7-pi"
   ],
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "defaultThinkingLevel": "medium",
-  "compactToolsDensity": "full",
+  "compactToolsDensity": "title",
   "externalEditor": "emacsclient -t",
   "enableInstallTelemetry": false,
   "showCacheMissNotices": true,

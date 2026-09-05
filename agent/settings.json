@@ -33,7 +33,8 @@
     "git:github.com/earendil-works/pi-review",
     "git:github.com/earendil-works/pi-review-loop",
     "git:github.com/DietrichGebert/ponytail",
-    "git:github.com/bergheim/pi-xmpp"
+    "git:github.com/bergheim/pi-xmpp",
+    "npm:@upstash/context7-pi"
   ],
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",

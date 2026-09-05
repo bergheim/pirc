@@ -7,7 +7,9 @@ export default function (): void {
 			"pass",
 			["show", "api/llm/context7"],
 			{ encoding: "utf8" },
-		).trim();
+		)
+			.split("\n", 1)[0]
+			.trim();
 	} catch {
 		// locked gpg or missing entry: leave unset, the tool reports the auth error
 	}

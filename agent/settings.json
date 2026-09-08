@@ -1,6 +1,6 @@
 {
   "theme": "bergheim-ansi-light/bergheim-ansi-dark",
-  "lastChangelogVersion": "0.84.4",
+  "lastChangelogVersion": "0.85.1",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-astra",
   "enabledModels": [
@@ -39,9 +39,9 @@
     "git:github.com/bergheim/pi-xmpp",
     "npm:@upstash/context7-pi"
   ],
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
-  "compactToolsDensity": "title",
+  "compactToolsDensity": "preview",
   "externalEditor": "emacsclient -t",
   "enableInstallTelemetry": false,
   "showCacheMissNotices": true,

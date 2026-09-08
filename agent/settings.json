@@ -1,8 +1,8 @@
 {
   "theme": "bergheim-ansi-light/bergheim-ansi-dark",
   "lastChangelogVersion": "0.84.4",
-  "defaultProvider": "claude-bridge",
-  "defaultModel": "claude-opus-5",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6-astra",
   "enabledModels": [
     "xai/grok-4.6",
     "claude-bridge/claude-fable-5",
@@ -11,7 +11,8 @@
     "claude-bridge/claude-opus-5",
     "openai-codex/gpt-5.6-terra",
     "agy/gemini-3.7-flash",
-    "llama/bot-fast"
+    "llama/bot-fast",
+    "openai-codex/gpt-6-astra"
   ],
   "npmCommand": [
     "pnpm",

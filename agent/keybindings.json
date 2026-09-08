@@ -10,7 +10,7 @@
     "tui.editor.cursorRight": ["right"],
     "tui.editor.cursorLeft": ["left"],
     "app.tools.expand": [],
-    "app.model.select": ["ctrl+shift+m"],
+    "app.model.select": ["ctrl+o"],
     "app.model.cycleBackward": ["shift+ctrl+p"],
     "app.model.cycleForward": ["ctrl+p"]
 }

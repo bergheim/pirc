@@ -1,8 +1,8 @@
 {
   "theme": "bergheim-ansi-light/bergheim-ansi-dark",
-  "lastChangelogVersion": "0.85.1",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6-astra",
+  "lastChangelogVersion": "0.87.1",
+  "defaultProvider": "claude-bridge",
+  "defaultModel": "claude-opus-5-5",
   "enabledModels": [
     "xai/grok-4.6",
     "claude-bridge/claude-fable-5",
@@ -12,7 +12,8 @@
     "openai-codex/gpt-5.6-terra",
     "agy/gemini-3.7-flash",
     "llama/bot-fast",
-    "openai-codex/gpt-6-astra"
+    "openai-codex/gpt-6-astra",
+    "claude-bridge/claude-opus-5-5"
   ],
   "npmCommand": [
     "pnpm",
@@ -41,7 +42,7 @@
   ],
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
-  "compactToolsDensity": "preview",
+  "compactToolsDensity": "title",
   "externalEditor": "emacsclient -t",
   "enableInstallTelemetry": false,
   "showCacheMissNotices": true,

@@ -32,12 +32,12 @@
       "skills": []
     },
     "npm:pi-system-prompt",
-    "npm:pi-claude-bridge",
     "git:github.com/earendil-works/pi-review",
     "git:github.com/earendil-works/pi-review-loop",
     "git:github.com/DietrichGebert/ponytail",
     "git:github.com/bergheim/pi-xmpp",
-    "npm:@upstash/context7-pi"
+    "npm:@upstash/context7-pi",
+    "git:github.com/elidickinson/pi-claude-bridge"
   ],
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",

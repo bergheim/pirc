@@ -1,4 +1,5 @@
 {
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
   "theme": "bergheim-ansi-light/bergheim-ansi-dark",
   "lastChangelogVersion": "1.5.0",
   "defaultProvider": "claude-bridge",
@@ -62,5 +63,6 @@
     "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.36.0",
     "{\"source\":\"npm:pi-lens\",\"scope\":\"user\"}": "4.3.0",
     "{\"source\":\"git:github.com/elidickinson/pi-claude-bridge\",\"scope\":\"user\"}": "0.9.1"
-  }
+  },
+  "collapseChangelog": true
 }
